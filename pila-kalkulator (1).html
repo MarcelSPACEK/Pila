@@ -1,0 +1,2005 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pila Kalkulátor – Optimalizace řezání kulatiny</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f0e0c;
+    --surface: #1a1814;
+    --surface2: #242118;
+    --border: #3a3528;
+    --accent: #d4a843;
+    --accent2: #c67c2a;
+    --wood: #8B5E3C;
+    --wood-light: #c4936a;
+    --wood-dark: #5c3d1e;
+    --saw: #e8e0d0;
+    --text: #e8e0d0;
+    --muted: #7a7060;
+    --green: #5a8a4a;
+    --cut-line: #ff6b35;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grain texture overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.4;
+  }
+
+  header {
+    border-bottom: 2px solid var(--border);
+    padding: 16px 32px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: var(--surface);
+    flex-wrap: wrap;
+  }
+
+  .top-nav {
+    display: flex;
+    gap: 4px;
+    margin-left: auto;
+  }
+
+  .nav-tab {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 8px 18px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .nav-tab:hover { border-color: var(--accent2); color: var(--text); }
+  .nav-tab.active { border-color: var(--accent); color: var(--accent); background: #1a1500; }
+
+  /* TAB PAGES */
+  .tab-page {
+    display: none;
+    position: fixed;
+    inset: 0;
+    top: 73px;
+    background: var(--bg);
+    z-index: 50;
+    overflow-y: auto;
+  }
+
+  .tab-page.active { display: block; }
+
+  .tab-page-inner {
+    max-width: 700px;
+    margin: 0 auto;
+    padding: 32px 24px;
+  }
+
+  @media (max-width: 600px) {
+    .top-nav { margin-left: 0; width: 100%; }
+    .nav-tab { flex: 1; text-align: center; padding: 8px 8px; font-size: 0.68rem; }
+  }
+
+  .logo-icon {
+    width: 42px;
+    height: 42px;
+    background: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+  }
+
+  header h1 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2rem;
+    letter-spacing: 3px;
+    color: var(--accent);
+    line-height: 1;
+  }
+
+  header p {
+    font-size: 0.75rem;
+    color: var(--muted);
+    font-family: 'IBM Plex Mono', monospace;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .main-layout {
+    display: grid;
+    grid-template-columns: 420px 1fr;
+    min-height: calc(100vh - 80px);
+  }
+
+  /* LEFT PANEL - INPUT */
+  .input-panel {
+    background: var(--surface);
+    border-right: 2px solid var(--border);
+    padding: 32px;
+    overflow-y: auto;
+  }
+
+  .section-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .input-group {
+    margin-bottom: 20px;
+  }
+
+  .input-group label {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-bottom: 6px;
+    font-family: 'IBM Plex Mono', monospace;
+    letter-spacing: 1px;
+  }
+
+  .input-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+  }
+
+  .input-row .input-group { margin-bottom: 0; }
+
+  input[type=number], input[type=text], select {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 12px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 0.2s;
+    -webkit-appearance: none;
+  }
+
+  input[type=number]:focus, select:focus {
+    border-color: var(--accent);
+  }
+
+  input[type=number]::placeholder { color: var(--muted); }
+
+  .unit-badge {
+    display: inline-block;
+    background: var(--border);
+    color: var(--muted);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.65rem;
+    padding: 2px 6px;
+    letter-spacing: 1px;
+    margin-left: 6px;
+  }
+
+  /* Sortiment selector */
+  .sortiment-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .sort-card {
+    border: 1px solid var(--border);
+    padding: 10px 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--surface2);
+    position: relative;
+  }
+
+  .sort-card:hover { border-color: var(--accent2); }
+  .sort-card.active { border-color: var(--accent); background: #2a2410; }
+
+  .sort-card .sort-name {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1rem;
+    letter-spacing: 2px;
+    color: var(--accent);
+  }
+
+  .sort-card .sort-dim {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  .sort-card .check {
+    position: absolute;
+    top: 6px; right: 6px;
+    width: 14px; height: 14px;
+    background: var(--accent);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    color: #000;
+  }
+
+  .sort-card.active .check { display: flex; }
+
+  /* Custom dimensions */
+  .custom-dims {
+    display: none;
+    margin-top: 12px;
+    padding: 12px;
+    background: var(--surface2);
+    border: 1px dashed var(--border);
+  }
+
+  .custom-dims.visible { display: block; }
+
+  .dim-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+
+  .dim-row input { flex: 1; }
+
+  .btn-remove {
+    width: 30px; height: 30px;
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 14px;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+
+  .btn-remove:hover { border-color: #c04040; color: #c04040; }
+
+  .btn-add-dim {
+    width: 100%;
+    background: none;
+    border: 1px dashed var(--border);
+    color: var(--muted);
+    padding: 8px;
+    cursor: pointer;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 1px;
+    transition: all 0.2s;
+  }
+
+  .btn-add-dim:hover { border-color: var(--accent); color: var(--accent); }
+
+  .btn-calculate {
+    width: 100%;
+    background: var(--accent);
+    border: none;
+    color: #0f0e0c;
+    padding: 16px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.4rem;
+    letter-spacing: 4px;
+    cursor: pointer;
+    margin-top: 24px;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .btn-calculate:hover { background: #e8bc55; transform: translateY(-1px); }
+  .btn-calculate:active { transform: translateY(0); }
+
+  .btn-calculate::after {
+    content: '▶';
+    margin-left: 8px;
+    font-size: 0.9rem;
+  }
+
+  /* RIGHT PANEL - OUTPUT */
+  .output-panel {
+    padding: 32px;
+    overflow-y: auto;
+  }
+
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    min-height: 400px;
+    color: var(--muted);
+    text-align: center;
+    gap: 16px;
+  }
+
+  .empty-state .big-icon {
+    font-size: 4rem;
+    opacity: 0.3;
+  }
+
+  .empty-state p {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.8rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  /* RESULTS */
+  .results { display: none; animation: fadeIn 0.4s ease; }
+  .results.visible { display: block; }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+  .results-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+  }
+
+  .results-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2rem;
+    letter-spacing: 3px;
+    color: var(--accent);
+  }
+
+  .efficiency-badge {
+    background: var(--green);
+    color: #fff;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.8rem;
+    padding: 6px 14px;
+    letter-spacing: 2px;
+  }
+
+  /* Cross-section visualization */
+  .viz-container {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 24px;
+    margin-bottom: 24px;
+    position: relative;
+  }
+
+  .viz-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 16px;
+  }
+
+  .svg-wrap {
+    display: flex;
+    justify-content: center;
+  }
+
+  /* Steps */
+  .steps-container { margin-top: 24px; }
+
+  .step-item {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 16px;
+    position: relative;
+    animation: slideIn 0.3s ease both;
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(-12px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  .step-item:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    left: 19px;
+    top: 40px;
+    bottom: -16px;
+    width: 2px;
+    background: var(--border);
+  }
+
+  .step-num {
+    width: 40px; height: 40px;
+    background: var(--surface2);
+    border: 2px solid var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.1rem;
+    color: var(--accent);
+    flex-shrink: 0;
+    z-index: 1;
+  }
+
+  .step-body {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 14px 16px;
+  }
+
+  .step-action {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1rem;
+    letter-spacing: 2px;
+    color: var(--accent);
+    margin-bottom: 4px;
+  }
+
+  .step-detail {
+    font-size: 0.85rem;
+    color: var(--text);
+    line-height: 1.5;
+  }
+
+  .step-detail strong {
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .step-measure {
+    display: inline-block;
+    background: var(--cut-line);
+    color: #fff;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    margin-top: 6px;
+  }
+
+  /* Output list */
+  .output-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+
+  .output-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    padding: 14px;
+  }
+
+  .output-item .qty {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2rem;
+    color: var(--accent);
+    line-height: 1;
+  }
+
+  .output-item .type {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-top: 2px;
+  }
+
+  .output-item .dims {
+    font-size: 0.9rem;
+    color: var(--text);
+    margin-top: 4px;
+  }
+
+  .waste-bar-container {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 16px;
+    margin-top: 16px;
+  }
+
+  .waste-bar-label {
+    display: flex;
+    justify-content: space-between;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--muted);
+    margin-bottom: 8px;
+    letter-spacing: 1px;
+  }
+
+  .waste-bar-track {
+    height: 8px;
+    background: var(--border);
+    position: relative;
+  }
+
+  .waste-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    transition: width 1s ease;
+  }
+
+  /* Info tag */
+  .info-tag {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: 4px 10px;
+    color: var(--muted);
+    display: inline-block;
+    margin-top: 6px;
+  }
+
+  /* responsive */
+  @media (max-width: 900px) {
+    .main-layout { grid-template-columns: 1fr; }
+    .input-panel { border-right: none; border-bottom: 2px solid var(--border); }
+  }
+
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 24px 0;
+  }
+
+  select option { background: var(--surface2); }
+
+  .note-box {
+    background: #1e1a0e;
+    border: 1px solid #3a3010;
+    border-left: 3px solid var(--accent2);
+    padding: 12px 14px;
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-top: 12px;
+    line-height: 1.6;
+  }
+
+  .note-box strong { color: var(--accent); }
+
+  .kerf-note {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--muted);
+    margin-top: 8px;
+    padding: 6px 10px;
+    border: 1px dashed var(--border);
+  }
+
+  /* DŘEVINY */
+  .species-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  .species-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 10px;
+    cursor: pointer;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.8rem;
+    text-align: left;
+    transition: all 0.2s;
+    position: relative;
+  }
+
+  .species-btn:hover { border-color: var(--accent2); }
+  .species-btn.active { border-color: var(--accent); background: #2a2410; color: var(--accent); }
+
+  .species-btn .sp-name { font-weight: 600; }
+  .species-btn .sp-tag {
+    font-size: 0.65rem;
+    color: var(--muted);
+    font-family: 'IBM Plex Mono', monospace;
+    display: block;
+    margin-top: 1px;
+  }
+  .species-btn.active .sp-tag { color: var(--accent2); }
+
+  .species-info {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent2);
+    padding: 10px 12px;
+    font-size: 0.78rem;
+    line-height: 1.6;
+    color: var(--muted);
+    display: none;
+    margin-top: 4px;
+  }
+
+  .species-info.visible { display: block; }
+  .species-info strong { color: var(--accent); }
+  .species-info .si-row { display: flex; justify-content: space-between; margin-bottom: 3px; }
+  .species-info .si-val { color: var(--text); font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; }
+
+  /* CENOVÝ KALKULÁTOR */
+  .price-calc {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: 16px;
+    margin-top: 8px;
+  }
+
+  .price-result {
+    background: #1a1500;
+    border: 2px solid var(--accent);
+    padding: 16px;
+    margin-top: 12px;
+    display: none;
+  }
+
+  .price-result.visible { display: block; }
+
+  .price-main {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2.4rem;
+    color: var(--accent);
+    letter-spacing: 2px;
+    line-height: 1;
+  }
+
+  .price-sub {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--muted);
+    margin-top: 4px;
+    letter-spacing: 1px;
+  }
+
+  .price-breakdown {
+    margin-top: 12px;
+    border-top: 1px solid var(--border);
+    padding-top: 10px;
+  }
+
+  .pb-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.78rem;
+    padding: 3px 0;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  .pb-row .pb-label { color: var(--muted); }
+  .pb-row .pb-val { color: var(--text); }
+  .pb-row.total { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 6px; }
+  .pb-row.total .pb-label { color: var(--accent); }
+  .pb-row.total .pb-val { color: var(--accent); font-size: 0.9rem; }
+
+  .btn-calc-price {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    padding: 10px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1rem;
+    letter-spacing: 3px;
+    cursor: pointer;
+    margin-top: 10px;
+    transition: all 0.2s;
+  }
+
+  .btn-calc-price:hover { background: #2a2410; }
+
+  .price-tip {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--muted);
+    margin-top: 8px;
+    line-height: 1.5;
+  }
+
+  /* WEIGHT */
+  .weight-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .weight-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid #5a8a4a;
+    padding: 10px 12px;
+  }
+
+  .weight-item .wi-val {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.6rem;
+    color: #5a8a4a;
+    line-height: 1;
+  }
+
+  .weight-item .wi-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  .weight-total {
+    background: var(--surface);
+    border: 2px solid #5a8a4a;
+    padding: 12px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 4px;
+  }
+
+  .weight-total .wt-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  .weight-total .wt-val {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.8rem;
+    color: #5a8a4a;
+    letter-spacing: 2px;
+  }
+
+  /* SAVE BUTTON */
+  .btn-save-history {
+    width: 100%;
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 10px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.8rem;
+    letter-spacing: 2px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-save-history:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* HISTORY TOGGLE BUTTON */
+  .btn-history-toggle {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--accent);
+    border: none;
+    color: #000;
+    padding: 12px 20px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.8rem;
+    letter-spacing: 1px;
+    cursor: pointer;
+    z-index: 100;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    transition: all 0.2s;
+  }
+
+  .btn-history-toggle:hover { background: #e8bc55; transform: translateY(-2px); }
+
+  .history-badge {
+    background: #000;
+    color: var(--accent);
+    border-radius: 10px;
+    padding: 1px 7px;
+    font-size: 0.7rem;
+    margin-left: 4px;
+  }
+
+  /* HISTORY PANEL */
+  .history-panel {
+    position: fixed;
+    bottom: 80px;
+    right: 24px;
+    width: 360px;
+    max-height: 70vh;
+    background: var(--surface);
+    border: 2px solid var(--border);
+    z-index: 200;
+    display: none;
+    flex-direction: column;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.7);
+    overflow: hidden;
+  }
+
+  .history-panel.open { display: flex; }
+
+  .history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+    flex-shrink: 0;
+  }
+
+  .btn-close-history {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 4px 8px;
+    transition: color 0.2s;
+  }
+
+  .btn-close-history:hover { color: var(--text); }
+
+  #historyList {
+    overflow-y: auto;
+    flex: 1;
+    padding: 8px;
+  }
+
+  .history-item {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: 12px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: border-color 0.2s;
+    position: relative;
+  }
+
+  .history-item:hover { border-color: var(--accent); }
+
+  .hi-date {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+
+  .hi-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1rem;
+    letter-spacing: 2px;
+    color: var(--accent);
+  }
+
+  .hi-detail {
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-top: 3px;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  .hi-del {
+    position: absolute;
+    top: 8px; right: 8px;
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: color 0.2s;
+  }
+
+  .hi-del:hover { color: #c04040; }
+
+  .btn-clear-history {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 8px 14px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-clear-history:hover { color: #c04040; border-color: #c04040; background: #1a0808; }
+
+  .history-empty {
+    text-align: center;
+    padding: 30px 16px;
+    color: var(--muted);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 1px;
+  }
+
+  @media (max-width: 900px) {
+    .history-panel { width: calc(100vw - 48px); right: 24px; }
+    .btn-history-toggle { bottom: 16px; right: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-icon">🪚</div>
+  <div>
+    <h1>Pila Kalkulátor</h1>
+    <p>Optimalizace řezání kulatiny na pásové pile</p>
+  </div>
+  <nav class="top-nav">
+    <button class="nav-tab active" onclick="switchTab('rezny')" id="tab-rezny">🪚 Řezný plán</button>
+    <button class="nav-tab" onclick="switchTab('cena')" id="tab-cena">💰 Kalkulace ceny</button>
+    <button class="nav-tab" onclick="switchTab('historie')" id="tab-historie">📋 Historie <span id="historyCount" class="history-badge">0</span></button>
+  </nav>
+</header>
+
+<div class="main-layout">
+
+  <!-- LEFT: INPUT -->
+  <div class="input-panel">
+
+    <div class="section-label">// 01 — Rozměry kulatiny</div>
+
+    <div class="input-row" style="margin-bottom:20px;">
+      <div class="input-group">
+        <label>Průměr — začátek <span class="unit-badge">cm</span></label>
+        <input type="number" id="dStart" placeholder="30" min="5" max="120" step="1">
+      </div>
+      <div class="input-group">
+        <label>Průměr — střed <span class="unit-badge">cm</span></label>
+        <input type="number" id="dMid" placeholder="27" min="5" max="120" step="1">
+      </div>
+      <div class="input-group">
+        <label>Průměr — konec <span class="unit-badge">cm</span></label>
+        <input type="number" id="dEnd" placeholder="22" min="5" max="120" step="1">
+      </div>
+    </div>
+
+    <div class="input-group">
+      <label>Délka kulatiny <span class="unit-badge">cm</span></label>
+      <input type="number" id="length" placeholder="400" min="50" max="2000" step="10">
+    </div>
+
+    <div class="input-group">
+      <label>Tloušťka řezu pily (kerf) <span class="unit-badge">mm</span></label>
+      <input type="number" id="kerf" value="3" min="1" max="8" step="0.5">
+      <div class="kerf-note">Standardní pásová pila: 3–4 mm</div>
+    </div>
+
+    <div class="divider"></div>
+    <div class="section-label">// 02 — Požadované sortimenty</div>
+
+    <div class="sortiment-grid">
+      <div class="sort-card active" data-type="tram" onclick="toggleSort(this)">
+        <div class="check">✓</div>
+        <div class="sort-name">Trám</div>
+        <div class="sort-dim">10×10, 12×12, 15×15 cm</div>
+      </div>
+      <div class="sort-card active" data-type="prkno" onclick="toggleSort(this)">
+        <div class="check">✓</div>
+        <div class="sort-name">Prkno</div>
+        <div class="sort-dim">tl. 2–3 cm, š. 15–25 cm</div>
+      </div>
+      <div class="sort-card active" data-type="fosnka" onclick="toggleSort(this)">
+        <div class="check">✓</div>
+        <div class="sort-name">Fošna</div>
+        <div class="sort-dim">tl. 4–6 cm, š. 15–25 cm</div>
+      </div>
+      <div class="sort-card active" data-type="hranol" onclick="toggleSort(this)">
+        <div class="check">✓</div>
+        <div class="sort-name">Hranol</div>
+        <div class="sort-dim">6×8, 8×10, 10×12 cm</div>
+      </div>
+    </div>
+
+    <div class="input-group" style="margin-top:12px;">
+      <label>Prioritní sortiment</label>
+      <select id="priority">
+        <option value="auto">Automaticky (max. výtěžnost)</option>
+        <option value="tram">Preferovat trámy</option>
+        <option value="prkno">Preferovat prkna</option>
+        <option value="hranol">Preferovat hranoly</option>
+        <option value="fosnka">Preferovat fošny</option>
+      </select>
+    </div>
+
+    <div class="divider"></div>
+    <div class="section-label">// 03 — Druh dřeviny</div>
+
+    <div class="species-grid">
+      <button class="species-btn active" data-sp="smrk" onclick="selectSpecies(this)">
+        <span class="sp-name">🌲 Smrk</span>
+        <span class="sp-tag">měkké / jehličnan</span>
+      </button>
+      <button class="species-btn" data-sp="borovice" onclick="selectSpecies(this)">
+        <span class="sp-name">🌲 Borovice</span>
+        <span class="sp-tag">měkké / jehličnan</span>
+      </button>
+      <button class="species-btn" data-sp="modrin" onclick="selectSpecies(this)">
+        <span class="sp-name">🌲 Modřín</span>
+        <span class="sp-tag">střední / jehličnan</span>
+      </button>
+      <button class="species-btn" data-sp="dub" onclick="selectSpecies(this)">
+        <span class="sp-name">🌳 Dub</span>
+        <span class="sp-tag">tvrdé / listnaté</span>
+      </button>
+      <button class="species-btn" data-sp="buk" onclick="selectSpecies(this)">
+        <span class="sp-name">🌳 Buk</span>
+        <span class="sp-tag">tvrdé / listnaté</span>
+      </button>
+      <button class="species-btn" data-sp="habr" onclick="selectSpecies(this)">
+        <span class="sp-name">🌳 Habr</span>
+        <span class="sp-tag">velmi tvrdé</span>
+      </button>
+      <button class="species-btn" data-sp="javor" onclick="selectSpecies(this)">
+        <span class="sp-name">🌳 Javor</span>
+        <span class="sp-tag">tvrdé / listnaté</span>
+      </button>
+      <button class="species-btn" data-sp="jasan" onclick="selectSpecies(this)">
+        <span class="sp-name">🌳 Jasan</span>
+        <span class="sp-tag">tvrdé / pružné</span>
+      </button>
+      <button class="species-btn" data-sp="bříza" onclick="selectSpecies(this)">
+        <span class="sp-name">🌳 Bříza</span>
+        <span class="sp-tag">středně tvrdé</span>
+      </button>
+      <button class="species-btn" data-sp="osika" onclick="selectSpecies(this)">
+        <span class="sp-name">🌳 Osika/Topol</span>
+        <span class="sp-tag">měkké / lehké</span>
+      </button>
+    </div>
+
+    <div class="species-info" id="speciesInfo"></div>
+
+    <div class="divider"></div>
+    <div class="section-label">// 04 — Vlastní rozměry (volitelné)</div>
+
+    <div id="customDims">
+      <!-- filled dynamically -->
+    </div>
+    <button class="btn-add-dim" onclick="addCustomDim()">+ Přidat vlastní rozměr</button>
+
+    <button class="btn-calculate" onclick="calculate()">Spočítat řezný plán</button>
+
+    <div class="note-box" style="margin-top:16px;">
+      <strong>ℹ Poznámka:</strong> Kalkulátor počítá s nejmenším průměrem (kritické místo) a odečítá kůru ~2 cm. Výsledky jsou orientační — vždy zkontrolujte skutečné míry a stav kulatiny.
+    </div>
+  </div>
+
+  <!-- RIGHT: OUTPUT -->
+  <div class="output-panel">
+
+    <div class="empty-state" id="emptyState">
+      <div class="big-icon">🌲</div>
+      <p>Zadejte rozměry kulatiny<br>a spusťte výpočet</p>
+    </div>
+
+    <div class="results" id="results">
+      <div class="results-header">
+        <div class="results-title">Řezný plán</div>
+        <div class="efficiency-badge" id="efficiencyBadge">Výtěžnost: —%</div>
+      </div>
+
+      <!-- Cross-section SVG -->
+      <div class="viz-container">
+        <div class="viz-label">// Průřez v kritickém místě (nejtenčí průměr)</div>
+        <div class="svg-wrap" id="svgWrap"></div>
+      </div>
+
+      <!-- Output products -->
+      <div class="section-label">// Co z toho nařežeme</div>
+      <div class="output-grid" id="outputGrid"></div>
+
+      <!-- Waste bar -->
+      <div class="waste-bar-container">
+        <div class="waste-bar-label">
+          <span>Využité dřevo</span>
+          <span id="wasteText">—</span>
+        </div>
+        <div class="waste-bar-track">
+          <div class="waste-bar-fill" id="wasteFill" style="width:0%"></div>
+        </div>
+      </div>
+
+      <!-- Weight calculation -->
+      <div class="divider"></div>
+      <div class="section-label">// Hmotnost nařízaného řeziva ⚖️</div>
+      <div class="weight-grid" id="weightGrid"></div>
+      <div class="weight-total" id="weightTotal"></div>
+
+      <!-- Step-by-step guide -->
+      <div class="divider"></div>
+      <div class="section-label">// Krok-za-krokem průvodce řezáním</div>
+      <div class="steps-container" id="stepsContainer"></div>
+
+      <!-- Save to history button -->
+      <div class="divider"></div>
+      <button class="btn-save-history" onclick="saveToHistory()">💾 Uložit do historie</button>
+
+    </div>
+  </div>
+</div>
+
+<!-- PRICE TAB -->
+<div class="tab-page" id="page-cena">
+  <div class="tab-page-inner">
+    <div class="section-label">// Kalkulace ceny řezání 💰</div>
+    <div class="price-calc">
+      <div class="input-group">
+        <label>Objem dřeva k řezání <span class="unit-badge">m³</span></label>
+        <input type="number" id="priceM3" placeholder="2.0" min="0.1" max="100" step="0.1">
+      </div>
+      <div class="input-group">
+        <label>Vaše sazba za m³ <span class="unit-badge">Kč</span></label>
+        <input type="number" id="priceRate" placeholder="800" min="100" max="10000" step="50">
+      </div>
+      <div class="input-group">
+        <label>Doprava / přistavení <span class="unit-badge">Kč</span></label>
+        <input type="number" id="priceTransport" placeholder="0" min="0" max="50000" step="100">
+      </div>
+      <div class="input-group">
+        <label>Počet pracovníků</label>
+        <select id="priceWorkers">
+          <option value="1">1 – sám</option>
+          <option value="2" selected>2 – s pomocníkem</option>
+          <option value="3">3 osoby</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label>Odhadovaný čas řezání <span class="unit-badge">hod</span></label>
+        <input type="number" id="priceHours" placeholder="3" min="0.5" max="24" step="0.5">
+      </div>
+      <div class="input-group">
+        <label>Hodinová mzda / osobu <span class="unit-badge">Kč</span></label>
+        <input type="number" id="priceWage" placeholder="200" min="50" max="2000" step="50">
+      </div>
+      <button class="btn-calc-price" onclick="calcPrice()">▶ Spočítat cenu</button>
+      <div class="price-result" id="priceResult">
+        <div class="price-sub">CELKOVÁ CENA ZA ŘEZÁNÍ</div>
+        <div class="price-main" id="priceFinal">— Kč</div>
+        <div class="price-breakdown" id="priceBreakdown"></div>
+        <div class="price-tip" id="priceTip"></div>
+      </div>
+    </div>
+    <div class="note-box" style="margin-top:16px;">
+      <strong>💡 Tip:</strong> Vybrané dřevině se automaticky přizpůsobí koeficient obtížnosti řezání — přejděte nejprve na záložku <em>Řezný plán</em> a vyberte dřevinu.
+    </div>
+  </div>
+</div>
+
+<!-- HISTORY TAB -->
+<div class="tab-page" id="page-historie">
+  <div class="tab-page-inner">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <div class="section-label" style="margin:0;border:none;padding:0;">// Historie výpočtů</div>
+      <button class="btn-clear-history" onclick="clearHistory()">🗑 Vymazat vše</button>
+    </div>
+    <div id="historyList"></div>
+  </div>
+</div>
+
+<script>
+// ─── STATE ───────────────────────────────────────────────────────────────────
+let activeTypes = new Set(['tram','prkno','fosnka','hranol']);
+let customDimsList = [];
+
+function toggleSort(el) {
+  const type = el.dataset.type;
+  if (activeTypes.has(type)) {
+    activeTypes.delete(type);
+    el.classList.remove('active');
+  } else {
+    activeTypes.add(type);
+    el.classList.add('active');
+  }
+}
+
+function addCustomDim() {
+  const id = Date.now();
+  customDimsList.push(id);
+  const container = document.getElementById('customDims');
+  const row = document.createElement('div');
+  row.className = 'dim-row';
+  row.id = 'dim_' + id;
+  row.innerHTML = `
+    <input type="number" placeholder="Šířka cm" id="cw_${id}" min="1" max="60" step="1">
+    <span style="color:var(--muted);font-size:0.8rem;flex-shrink:0;">×</span>
+    <input type="number" placeholder="Výška cm" id="ch_${id}" min="1" max="60" step="1">
+    <button class="btn-remove" onclick="removeCustomDim(${id})">✕</button>
+  `;
+  container.appendChild(row);
+}
+
+function removeCustomDim(id) {
+  const el = document.getElementById('dim_' + id);
+  if (el) el.remove();
+  customDimsList = customDimsList.filter(x => x !== id);
+}
+
+// ─── CORE GEOMETRY ───────────────────────────────────────────────────────────
+// Largest inscribed rectangle in circle of radius r
+// For a rectangle w×h: w²+h² ≤ (2r)²
+// To maximize area w×h given w² + h² = (2r)²
+// For square: w=h= r√2
+// For given aspect: optimize
+
+function insideDiameter(r, bark = 2) {
+  return r - bark; // effective radius after bark removal (bark each side ~1cm)
+}
+
+function largestSquare(r) {
+  const d = 2 * r;
+  return (d / Math.sqrt(2));
+}
+
+function largestRect(r, ratio) {
+  // w/h = ratio, w²+h²=(2r)²
+  // h = w/ratio → w²+w²/ratio²=(2r)² → w=2r/sqrt(1+1/ratio²)
+  const d = 2 * r;
+  const w = d / Math.sqrt(1 + 1 / (ratio * ratio));
+  const h = w / ratio;
+  return { w, h };
+}
+
+// ─── OPTIMIZER ───────────────────────────────────────────────────────────────
+const STANDARD_PRODUCTS = {
+  tram: [
+    { w: 15, h: 15, name: 'Trám 15×15' },
+    { w: 12, h: 12, name: 'Trám 12×12' },
+    { w: 10, h: 10, name: 'Trám 10×10' },
+    { w: 8, h: 8,   name: 'Trám 8×8' },
+  ],
+  hranol: [
+    { w: 12, h: 10, name: 'Hranol 12×10' },
+    { w: 10, h: 8,  name: 'Hranol 10×8' },
+    { w: 8, h: 6,   name: 'Hranol 8×6' },
+    { w: 6, h: 8,   name: 'Hranol 6×8' },
+  ],
+  fosnka: [
+    { w: 20, h: 6, name: 'Fošna 20×6' },
+    { w: 20, h: 5, name: 'Fošna 20×5' },
+    { w: 15, h: 6, name: 'Fošna 15×6' },
+    { w: 15, h: 5, name: 'Fošna 15×5' },
+    { w: 25, h: 4, name: 'Fošna 25×4' },
+    { w: 20, h: 4, name: 'Fošna 20×4' },
+  ],
+  prkno: [
+    { w: 25, h: 3, name: 'Prkno 25×3' },
+    { w: 20, h: 3, name: 'Prkno 20×3' },
+    { w: 25, h: 2, name: 'Prkno 25×2' },
+    { w: 20, h: 2, name: 'Prkno 20×2' },
+    { w: 15, h: 2, name: 'Prkno 15×2' },
+    { w: 15, h: 3, name: 'Prkno 15×3' },
+  ]
+};
+
+function fitsInCircle(w, h, r) {
+  // check all 4 corners of centered rectangle
+  const hw = w / 2, hh = h / 2;
+  return (Math.sqrt(hw * hw + hh * hh) <= r);
+}
+
+function findBestPlan(rEff, kerf, priority, customItems) {
+  // Build candidate list
+  let candidates = [];
+
+  for (const [type, items] of Object.entries(STANDARD_PRODUCTS)) {
+    if (!activeTypes.has(type)) continue;
+    for (const item of items) {
+      if (fitsInCircle(item.w, item.h, rEff)) {
+        candidates.push({ ...item, type });
+      }
+    }
+  }
+
+  // Add custom dims
+  for (const id of customDimsList) {
+    const cw = parseFloat(document.getElementById('cw_' + id)?.value);
+    const ch = parseFloat(document.getElementById('ch_' + id)?.value);
+    if (cw > 0 && ch > 0 && fitsInCircle(cw, ch, rEff)) {
+      candidates.push({ w: cw, h: ch, name: `Vlastní ${cw}×${ch}`, type: 'custom' });
+    }
+  }
+
+  if (candidates.length === 0) return null;
+
+  // Sort by priority + area
+  if (priority !== 'auto') {
+    candidates.sort((a, b) => {
+      const aP = a.type === priority ? 1 : 0;
+      const bP = b.type === priority ? 1 : 0;
+      if (aP !== bP) return bP - aP;
+      return (b.w * b.h) - (a.w * a.h);
+    });
+  } else {
+    candidates.sort((a, b) => (b.w * b.h) - (a.w * a.h));
+  }
+
+  // Greedy pack: fill circle with pieces
+  // Strategy: Try to fit a central piece + side boards
+  const plans = [];
+
+  // Plan A: Center large piece + flank boards
+  for (const center of candidates) {
+    if (!fitsInCircle(center.w, center.h, rEff)) continue;
+
+    const plan = { pieces: [{ ...center, x: 0, y: 0, label: 'střed' }], totalArea: center.w * center.h };
+
+    // Try to add boards above and below center piece
+    const topY = center.h / 2 + kerf / 10;
+    const remainTopR = rEff - topY;
+
+    if (remainTopR > 2) {
+      // Find best fitting plank for the sides
+      for (const side of candidates) {
+        if (side.h > remainTopR * 2 - 0.5) continue;
+        const halfH = side.h / 2;
+        const plankY = topY + halfH;
+        if (fitsInCircle(side.w, side.h, rEff) && (plankY + halfH) <= rEff) {
+          plan.pieces.push({ ...side, x: 0, y: topY + halfH, label: 'nad středem' });
+          plan.pieces.push({ ...side, x: 0, y: -(topY + halfH), label: 'pod středem' });
+          plan.totalArea += side.w * side.h * 2;
+          break;
+        }
+      }
+    }
+
+    // Try to add narrow boards on the sides
+    const sideX = center.w / 2 + kerf / 10;
+    const remainSideR = rEff - sideX;
+
+    if (remainSideR > 2) {
+      for (const side of candidates) {
+        if (side.type !== 'prkno' && side.type !== 'fosnka') continue;
+        // Rotate: side board fits as w becomes height direction
+        const rw = Math.min(side.w, side.h);
+        const rh = Math.max(side.w, side.h);
+        if (rw > remainSideR * 2) continue;
+        const bx = sideX + rw / 2;
+        if (fitsInCircle(rw, Math.min(rh, center.h), rEff)) {
+          const bh = Math.min(rh, center.h * 0.8);
+          plan.pieces.push({ w: rw, h: bh, x: bx, y: 0, name: side.name + ' (bok)', type: side.type, label: 'vpravo' });
+          plan.pieces.push({ w: rw, h: bh, x: -bx, y: 0, name: side.name + ' (bok)', type: side.type, label: 'vlevo' });
+          plan.totalArea += rw * bh * 2;
+          break;
+        }
+      }
+    }
+
+    plans.push(plan);
+    if (plans.length >= 4) break;
+  }
+
+  if (plans.length === 0) return null;
+
+  // Pick plan with highest total area
+  plans.sort((a, b) => b.totalArea - a.totalArea);
+  return plans[0];
+}
+
+// ─── MAIN CALCULATE ──────────────────────────────────────────────────────────
+function calculate() {
+  const dStart = parseFloat(document.getElementById('dStart').value);
+  const dMid   = parseFloat(document.getElementById('dMid').value);
+  const dEnd   = parseFloat(document.getElementById('dEnd').value);
+  const length = parseFloat(document.getElementById('length').value);
+  const kerf   = parseFloat(document.getElementById('kerf').value) || 3;
+  const priority = document.getElementById('priority').value;
+
+  if (!dStart || !dEnd || !length) {
+    alert('Vyplňte průměry a délku kulatiny.');
+    return;
+  }
+
+  const dMin = Math.min(dStart, dMid || dStart, dEnd); // critical cross-section
+  const rRaw = dMin / 2;
+  const BARK = 1.0; // bark each side in cm
+  const rEff = rRaw - BARK;
+
+  const circleArea = Math.PI * rEff * rEff;
+
+  const plan = findBestPlan(rEff, kerf / 10, priority, []);
+
+  // Show results
+  document.getElementById('emptyState').style.display = 'none';
+  const resultsEl = document.getElementById('results');
+  resultsEl.classList.add('visible');
+
+  if (!plan) {
+    resultsEl.innerHTML = `<div style="color:var(--muted);font-family:'IBM Plex Mono',monospace;padding:40px 0;text-align:center;">
+      Průměr kulatiny je příliš malý pro standardní sortimenty.<br>Zkuste zadat vlastní rozměry.
+    </div>`;
+    return;
+  }
+
+  const efficiency = Math.min(99, Math.round((plan.totalArea / circleArea) * 100));
+
+  document.getElementById('efficiencyBadge').textContent = `Výtěžnost: ${efficiency}%`;
+
+  // ── VISUALIZATION SVG ─────────────────────────────────────────────────────
+  const SVG_SIZE = 320;
+  const scale = (SVG_SIZE * 0.42) / rEff;
+  const cx = SVG_SIZE / 2, cy = SVG_SIZE / 2;
+
+  const pieceColors = { tram: '#8B5E3C', hranol: '#7a6040', fosnka: '#a07040', prkno: '#c49060', custom: '#909080' };
+  const pieceStroke = { tram: '#c4936a', hranol: '#b08050', fosnka: '#d0a070', prkno: '#e0b080', custom: '#b0b090' };
+
+  let svgPieces = '';
+  for (const piece of plan.pieces) {
+    const px = cx + piece.x * scale - (piece.w * scale) / 2;
+    const py = cy - piece.y * scale - (piece.h * scale) / 2;
+    const pw = piece.w * scale;
+    const ph = piece.h * scale;
+    const col = pieceColors[piece.type] || '#8B5E3C';
+    const str = pieceStroke[piece.type] || '#c4936a';
+
+    // Wood grain lines
+    let grainLines = '';
+    for (let g = 4; g < pw; g += 8) {
+      grainLines += `<line x1="${px + g}" y1="${py + 2}" x2="${px + g}" y2="${py + ph - 2}" stroke="${str}" stroke-width="0.5" opacity="0.3"/>`;
+    }
+
+    svgPieces += `
+      <rect x="${px}" y="${py}" width="${pw}" height="${ph}" fill="${col}" stroke="${str}" stroke-width="1.5" rx="1"/>
+      ${grainLines}
+      <text x="${px + pw/2}" y="${py + ph/2 + 4}" text-anchor="middle" fill="#fff" font-size="${Math.max(7, Math.min(11, pw/piece.name.length*1.2))}" font-family="IBM Plex Mono,monospace" opacity="0.85">${piece.w}×${piece.h}</text>
+    `;
+  }
+
+  // Cut lines (horizontal)
+  let cutLines = '';
+  const cuts = getCuts(plan.pieces, cx, cy, scale);
+  for (const cut of cuts) {
+    cutLines += `<line x1="${cx - rEff * scale - 8}" y1="${cut}" x2="${cx + rEff * scale + 8}" y2="${cut}" stroke="#ff6b35" stroke-width="1" stroke-dasharray="4,3" opacity="0.7"/>`;
+  }
+
+  const svgMarkup = `
+  <svg width="${SVG_SIZE}" height="${SVG_SIZE}" viewBox="0 0 ${SVG_SIZE} ${SVG_SIZE}">
+    <!-- Background -->
+    <rect width="${SVG_SIZE}" height="${SVG_SIZE}" fill="#0f0e0c"/>
+    <!-- Log circle (bark) -->
+    <circle cx="${cx}" cy="${cy}" r="${rRaw * scale}" fill="#3d2810" stroke="#5a3a1a" stroke-width="2"/>
+    <!-- Effective circle (without bark) -->
+    <circle cx="${cx}" cy="${cy}" r="${rEff * scale}" fill="#1a0f05" stroke="#6a4020" stroke-width="1" stroke-dasharray="4,3"/>
+    <!-- Pieces -->
+    ${svgPieces}
+    <!-- Cut lines -->
+    ${cutLines}
+    <!-- Diameter label -->
+    <line x1="${cx - rEff*scale}" y1="${cy + rEff*scale + 14}" x2="${cx + rEff*scale}" y2="${cy + rEff*scale + 14}" stroke="#d4a843" stroke-width="1"/>
+    <text x="${cx}" y="${cy + rEff*scale + 26}" text-anchor="middle" fill="#d4a843" font-size="10" font-family="IBM Plex Mono,monospace">⌀ ${dMin} cm (kritické místo)</text>
+  </svg>`;
+
+  document.getElementById('svgWrap').innerHTML = svgMarkup;
+
+  // ── OUTPUT PRODUCTS LIST ──────────────────────────────────────────────────
+  const counts = {};
+  for (const p of plan.pieces) {
+    const key = `${p.type}|${p.w}×${p.h}`;
+    if (!counts[key]) counts[key] = { ...p, count: 0 };
+    counts[key].count++;
+  }
+
+  let gridHTML = '';
+  for (const item of Object.values(counts)) {
+    const typeName = { tram: 'TRÁM', hranol: 'HRANOL', prkno: 'PRKNO', fosnka: 'FOŠNA', custom: 'VLASTNÍ' }[item.type] || 'KUS';
+    const lengthM = (length / 100).toFixed(2);
+    gridHTML += `
+      <div class="output-item">
+        <div class="qty">${item.count}×</div>
+        <div class="type">${typeName}</div>
+        <div class="dims">${item.w} × ${item.h} cm</div>
+        <div class="info-tag">dl. ${lengthM} m</div>
+      </div>
+    `;
+  }
+  document.getElementById('outputGrid').innerHTML = gridHTML;
+
+  // Waste bar
+  document.getElementById('wasteText').textContent = `${efficiency}% dřevo  /  ${100 - efficiency}% odpad`;
+  setTimeout(() => {
+    document.getElementById('wasteFill').style.width = efficiency + '%';
+  }, 100);
+
+  // ── STEP-BY-STEP GUIDE ────────────────────────────────────────────────────
+  const steps = buildSteps(plan, rEff, kerf, dStart, dMid, dEnd, length);
+  let stepsHTML = '';
+  steps.forEach((s, i) => {
+    stepsHTML += `
+      <div class="step-item" style="animation-delay:${i * 0.07}s">
+        <div class="step-num">${i + 1}</div>
+        <div class="step-body">
+          <div class="step-action">${s.action}</div>
+          <div class="step-detail">${s.detail}</div>
+          ${s.measure ? `<div class="step-measure">↔ ${s.measure}</div>` : ''}
+        </div>
+      </div>
+    `;
+  });
+  document.getElementById('stepsContainer').innerHTML = stepsHTML;
+
+  // ── WEIGHT CALCULATION ────────────────────────────────────────────────────
+  const totalWeight = calcWeight(plan, length, selectedSpecies);
+
+  // ── SAVE CURRENT RESULT FOR HISTORY ──────────────────────────────────────
+  const productsSummary = Object.values(counts).map(i => `${i.count}× ${i.w}×${i.h}`).join(', ');
+  currentResult = {
+    dStart, dMid, dEnd, length,
+    dMin,
+    species: SPECIES[selectedSpecies]?.name || selectedSpecies,
+    speciesKey: selectedSpecies,
+    efficiency,
+    weight: totalWeight < 100 ? totalWeight.toFixed(1) : Math.round(totalWeight),
+    products: productsSummary,
+  };
+}
+
+function getCuts(pieces, cx, cy, scale) {
+  const ys = new Set();
+  for (const p of pieces) {
+    const top = cy - (p.y + p.h / 2) * scale;
+    const bot = cy - (p.y - p.h / 2) * scale;
+    ys.add(Math.round(top));
+    ys.add(Math.round(bot));
+  }
+  return [...ys];
+}
+
+function buildSteps(plan, rEff, kerf, dStart, dMid, dEnd, length) {
+  const steps = [];
+  const kerfCm = kerf / 10;
+
+  steps.push({
+    action: 'Příprava a kontrola kulatiny',
+    detail: `Změřte průměry: začátek <strong>${dStart} cm</strong>, střed <strong>${dMid || '—'} cm</strong>, konec <strong>${dEnd} cm</strong>. Délka: <strong>${length} cm</strong>. Odstraňte kůru a hrubé větve. Kritické místo (nejtenčí průměr) je rozhodující pro všechny řezy.`,
+    measure: null,
+  });
+
+  steps.push({
+    action: 'Upnutí kulatiny na pilu',
+    detail: `Upněte kulatinu tak, aby osa kulatiny byla rovnoběžná s osou pily. Zkontrolujte rovinu uložení — použijte klíny pokud je kulatina nestabilní.`,
+    measure: null,
+  });
+
+  // Find central piece
+  const center = plan.pieces.find(p => p.label === 'střed') || plan.pieces[0];
+
+  // First slab (flattening)
+  const firstCutH = rEff - center.h / 2;
+  steps.push({
+    action: 'První řez — odřezání bočního klínu',
+    detail: `Nastavte list pily na výšku <strong>${firstCutH.toFixed(1)} cm</strong> od spodní osy. Odřízněte spodní klín, aby vznikla rovná plocha. Tento odřezek je odpad (nebo štěpka).`,
+    measure: `Výška řezu: ${firstCutH.toFixed(1)} cm`,
+  });
+
+  steps.push({
+    action: 'Otočení kulatiny o 180°',
+    detail: `Otočte kulatinu o 180° a opřete ji o čerstvě odřezanou rovnou plochu. Upněte znovu. Nyní odřízněte druhý klín symetricky — výška řezu opět <strong>${firstCutH.toFixed(1)} cm</strong>.`,
+    measure: `Výška řezu: ${firstCutH.toFixed(1)} cm`,
+  });
+
+  // Now cut the main beam
+  const beamH = center.h;
+  const beamW = center.w;
+  steps.push({
+    action: `Řezání středového ${center.type === 'tram' ? 'trámu' : center.type === 'hranol' ? 'hranolu' : 'kusu'} ${beamW}×${beamH} cm`,
+    detail: `Nastavte vzdálenost listů (nebo dorazy) na <strong>${beamW} cm</strong> šířku. Prořízněte celou délku. Tím získáte hlavní sortiment — <strong>${center.name}</strong>.`,
+    measure: `${beamW} × ${beamH} cm`,
+  });
+
+  // Side boards
+  const sideBoards = plan.pieces.filter(p => p.label === 'nad středem' || p.label === 'pod středem');
+  if (sideBoards.length >= 2) {
+    const sb = sideBoards[0];
+    const sbY = Math.abs(sb.y);
+    const cutFromEdge = sbY - sb.h / 2;
+
+    steps.push({
+      action: `Otočení o 90° — řezání ${sb.type === 'prkno' ? 'prken' : 'fošen'}`,
+      detail: `Otočte čerstvě ořezaný blok o 90°. Ze zbývajícího dřeva nad a pod středovým kusem vyřízněte <strong>${sb.name}</strong>. Nastavte první řez na výšku <strong>${cutFromEdge.toFixed(1)} cm</strong> od hrany bloku.`,
+      measure: `1. řez: ${cutFromEdge.toFixed(1)} cm, pak každých ${(sb.h + kerfCm).toFixed(1)} cm`,
+    });
+  }
+
+  // Side pieces
+  const sidePieces = plan.pieces.filter(p => p.label === 'vpravo' || p.label === 'vlevo');
+  if (sidePieces.length >= 2) {
+    const sp = sidePieces[0];
+    steps.push({
+      action: `Řezání bočních ${sp.type === 'prkno' ? 'prken' : 'fošen'} z bočních klínů`,
+      detail: `Z bočních klínů (odřezky z prvních dvou řezů) lze vyřezat úzká prkna <strong>${sp.w}×${sp.h} cm</strong> v délce <strong>${length} cm</strong>. Přeřízněte klíny na tabuli a odřízněte kulatou stranu.`,
+      measure: `${sp.w} × ${sp.h} cm`,
+    });
+  }
+
+  steps.push({
+    action: 'Finální kontrola a třídění',
+    detail: `Změřte všechny vyřezané kusy. Zkontrolujte rovnost a případné trhliny (výkyvy vlhkosti). Složte na rovnou plochu s mezerami pro sušení. Minimální vzdálenost mezi vrstvami: <strong>2–3 cm</strong> (prokládky).`,
+    measure: null,
+  });
+
+  return steps;
+}
+
+// ─── WOOD SPECIES DATA ───────────────────────────────────────────────────────
+const SPECIES = {
+  smrk: {
+    name: 'Smrk obecný',
+    density: 470, // kg/m³ při 15% vlhkosti
+    hardness: 'Měkké',
+    difficulty: 1.0, // násobič obtížnosti řezání
+    moisture_ideal: '18–25 %',
+    best_for: 'Trámy, prkna, střešní latě, bednění, palubky',
+    notes: 'Nejběžnější jehličnan v ČR. Dobře se řeže, rychlé sušení. Pozor na suky u starších stromů.',
+    vady: 'Suky, pryskyřičné kapsy, modrání při vlhkosti',
+    price_m3: '1 800–2 800 Kč/m³',
+  },
+  borovice: {
+    name: 'Borovice lesní',
+    density: 520,
+    hardness: 'Měkké',
+    difficulty: 1.1,
+    moisture_ideal: '18–25 %',
+    best_for: 'Trámy, prkna, podlahy, okna, nábytek',
+    notes: 'Pryskyřičnatější než smrk — pila se rychleji zanáší. Odolnější vůči vlhkosti.',
+    vady: 'Pryskyřičné kapsy, velké suky, točivost vláken',
+    price_m3: '2 000–3 200 Kč/m³',
+  },
+  modrin: {
+    name: 'Modřín opadavý',
+    density: 590,
+    hardness: 'Střední',
+    difficulty: 1.2,
+    moisture_ideal: '15–20 %',
+    best_for: 'Terasy, fasády, okna, lodní paluba, mosty',
+    notes: 'Přirozeně odolný proti hnilobě. Vhodný do exteriéru bez impregnace. Hůře se řeže než smrk.',
+    vady: 'Točivost vláken, rychlé otupování listů',
+    price_m3: '2 500–4 000 Kč/m³',
+  },
+  dub: {
+    name: 'Dub letní/zimní',
+    density: 720,
+    hardness: 'Tvrdé',
+    difficulty: 1.8,
+    moisture_ideal: '15–20 %',
+    best_for: 'Podlahy, nábytek, sudy, trámy, schodiště',
+    notes: 'Prémiové dřevo. Řezání trvá 2× déle než jehličnany. Rychle otupuje pásy pily — počítejte s více výměnami.',
+    vady: 'Trhliny při rychlém sušení, třísloviny barví kovové spoje',
+    price_m3: '4 000–8 000 Kč/m³',
+  },
+  buk: {
+    name: 'Buk lesní',
+    density: 720,
+    hardness: 'Tvrdé',
+    difficulty: 1.7,
+    moisture_ideal: '12–18 %',
+    best_for: 'Nábytek, podlahy, schody, hračky, nářadí',
+    notes: 'Musí se rychle sušit — náchylné k trhání. Nelze použít v exteriéru. Homogenní struktura — krásně opracovatelné.',
+    vady: 'Náchylné k trhání při sušení, červenání jádra',
+    price_m3: '3 500–6 000 Kč/m³',
+  },
+  habr: {
+    name: 'Habr obecný',
+    density: 830,
+    hardness: 'Velmi tvrdé',
+    difficulty: 2.2,
+    moisture_ideal: '12–15 %',
+    best_for: 'Nástroje, ozubená kola, parkety, řezbářství',
+    notes: 'Nejtěžší domácí dřevo. Velmi náročné na pilu — krátké pásy, pomalý posuv. Speciální použití.',
+    vady: 'Točivá vlákna, obtížné sušení',
+    price_m3: '5 000–9 000 Kč/m³',
+  },
+  javor: {
+    name: 'Javor klen/mléč',
+    density: 650,
+    hardness: 'Tvrdé',
+    difficulty: 1.6,
+    moisture_ideal: '12–18 %',
+    best_for: 'Hudební nástroje, nábytek, podlahy, kuchyňské desky',
+    notes: 'Krásná světlá kresba. Řeže se dobře ale pomaleji než jehličnany. Cenné dřevo.',
+    vady: 'Zbarvení při oxidaci, náchylné k houbám při vlhkosti',
+    price_m3: '4 000–7 000 Kč/m³',
+  },
+  jasan: {
+    name: 'Jasan ztepilý',
+    density: 690,
+    hardness: 'Tvrdé / pružné',
+    difficulty: 1.6,
+    moisture_ideal: '12–18 %',
+    best_for: 'Nábytek, sportovní náčiní, rukojeti, schodiště',
+    notes: 'Velmi pružné — oblíbené na sportovní náčiní. Ohrožen jasanovou chřadnutím (Hymenoscyphus). Zkontrolujte zdraví stromu.',
+    vady: 'Jasanová chřadnutí, nestabilita při vlhkostních změnách',
+    price_m3: '3 500–6 500 Kč/m³',
+  },
+  bříza: {
+    name: 'Bříza bělokorá',
+    density: 620,
+    hardness: 'Středně tvrdé',
+    difficulty: 1.4,
+    moisture_ideal: '15–20 %',
+    best_for: 'Překližka, nábytek, dřevěné obaly, hračky',
+    notes: 'Rychle roste, levná. Nestabilní při vlhkosti — méně vhodná pro konstrukční účely. Krásná bílá kůra.',
+    vady: 'Velká sesychavost, náchylné k hnilobě v exteriéru',
+    price_m3: '1 500–2 500 Kč/m³',
+  },
+  osika: {
+    name: 'Osika / Topol',
+    density: 450,
+    hardness: 'Měkké / lehké',
+    difficulty: 0.9,
+    moisture_ideal: '20–30 %',
+    best_for: 'Zápalky, překližka, papír, palety, bedny',
+    notes: 'Nejlehčí domácí dřevo. Snadno se řeže. Nízká hodnota pro konstrukční použití.',
+    vady: 'Malá pevnost, rychlé hnití v exteriéru',
+    price_m3: '800–1 500 Kč/m³',
+  },
+};
+
+let selectedSpecies = 'smrk';
+
+function selectSpecies(btn) {
+  document.querySelectorAll('.species-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  selectedSpecies = btn.dataset.sp;
+  showSpeciesInfo(selectedSpecies);
+}
+
+function showSpeciesInfo(sp) {
+  const s = SPECIES[sp];
+  if (!s) return;
+  const box = document.getElementById('speciesInfo');
+  box.innerHTML = `
+    <div class="si-row"><span class="pb-label">Tvrdost:</span><span class="si-val">${s.hardness}</span></div>
+    <div class="si-row"><span class="pb-label">Hustota:</span><span class="si-val">${s.density} kg/m³</span></div>
+    <div class="si-row"><span class="pb-label">Vlhkost při řezání:</span><span class="si-val">${s.moisture_ideal}</span></div>
+    <div class="si-row"><span class="pb-label">Obtížnost řezání:</span><span class="si-val">${['','★☆☆','★★☆','★★★'][Math.min(3,Math.round(s.difficulty))]}</span></div>
+    <div style="margin-top:6px;"><strong>Použití:</strong> ${s.best_for}</div>
+    <div style="margin-top:4px;color:#9a8870;">${s.notes}</div>
+    <div style="margin-top:4px;"><strong>Tržní cena řeziva:</strong> ${s.price_m3}</div>
+    <div style="margin-top:4px;color:#c07040;font-size:0.72rem;">⚠ Vady: ${s.vady}</div>
+  `;
+  box.classList.add('visible');
+}
+
+// Show default species info on load
+showSpeciesInfo('smrk');
+
+// ─── PRICE CALCULATOR ────────────────────────────────────────────────────────
+function calcPrice() {
+  const m3 = parseFloat(document.getElementById('priceM3').value) || 0;
+  const rate = parseFloat(document.getElementById('priceRate').value) || 0;
+  const transport = parseFloat(document.getElementById('priceTransport').value) || 0;
+  const workers = parseInt(document.getElementById('priceWorkers').value) || 1;
+  const hours = parseFloat(document.getElementById('priceHours').value) || 0;
+  const wage = parseFloat(document.getElementById('priceWage').value) || 0;
+
+  if (m3 <= 0 || rate <= 0) {
+    alert('Vyplňte alespoň objem m³ a sazbu za m³.');
+    return;
+  }
+
+  const sp = SPECIES[selectedSpecies];
+  const diffMult = sp ? sp.difficulty : 1.0;
+
+  // Adjusted rate for wood difficulty
+  const adjustedRate = rate * diffMult;
+  const rezaniBase = m3 * adjustedRate;
+  const mzdyTotal = workers * hours * wage;
+  const total = rezaniBase + transport + mzdyTotal;
+
+  // Per m³ breakdown
+  const perM3 = total / m3;
+
+  const resultEl = document.getElementById('priceResult');
+  document.getElementById('priceFinal').textContent = Math.round(total).toLocaleString('cs-CZ') + ' Kč';
+
+  let breakdownHTML = '';
+
+  breakdownHTML += `<div class="pb-row"><span class="pb-label">Řezání (${m3} m³ × ${Math.round(adjustedRate)} Kč)</span><span class="pb-val">${Math.round(rezaniBase).toLocaleString('cs-CZ')} Kč</span></div>`;
+  if (diffMult !== 1.0) {
+    breakdownHTML += `<div class="pb-row"><span class="pb-label" style="font-size:0.65rem;">  ↳ koef. tvrdosti ${sp.name} ×${diffMult.toFixed(1)}</span><span class="pb-val"></span></div>`;
+  }
+  if (mzdyTotal > 0) {
+    breakdownHTML += `<div class="pb-row"><span class="pb-label">Mzdy (${workers}× ${hours}h × ${wage} Kč)</span><span class="pb-val">${Math.round(mzdyTotal).toLocaleString('cs-CZ')} Kč</span></div>`;
+  }
+  if (transport > 0) {
+    breakdownHTML += `<div class="pb-row"><span class="pb-label">Doprava / přistavení</span><span class="pb-val">${transport.toLocaleString('cs-CZ')} Kč</span></div>`;
+  }
+  breakdownHTML += `<div class="pb-row total"><span class="pb-label">CELKEM</span><span class="pb-val">${Math.round(total).toLocaleString('cs-CZ')} Kč</span></div>`;
+  breakdownHTML += `<div class="pb-row"><span class="pb-label">→ cena za m³</span><span class="pb-val">${Math.round(perM3).toLocaleString('cs-CZ')} Kč/m³</span></div>`;
+
+  document.getElementById('priceBreakdown').innerHTML = breakdownHTML;
+
+  // Tips
+  let tip = '';
+  if (sp && sp.difficulty >= 1.8) {
+    tip += `⚠ ${sp.name} je tvrdé dřevo — počítejte s více výměnami pásu pily a pomalejším posuvem.\n`;
+  }
+  if (m3 >= 5) tip += `💡 Velký objem — zvažte paušální slevu nebo příplatek za logistiku.\n`;
+  if (hours > 0 && m3 > 0) {
+    const m3perH = (m3 / hours).toFixed(1);
+    tip += `📊 Váš výkon: ~${m3perH} m³/hod`;
+  }
+
+  document.getElementById('priceTip').textContent = tip;
+  resultEl.classList.add('visible');
+}
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+// Pre-fill example
+document.getElementById('dStart').value = 30;
+document.getElementById('dMid').value = 27;
+document.getElementById('dEnd').value = 22;
+document.getElementById('length').value = 400;
+
+// ─── WEIGHT CALCULATION ──────────────────────────────────────────────────────
+function calcWeight(plan, lengthCm, speciesKey) {
+  const sp = SPECIES[speciesKey] || SPECIES['smrk'];
+  const density = sp.density; // kg/m³ at ~15% moisture
+  const lengthM = lengthCm / 100;
+
+  // Count unique pieces
+  const counts = {};
+  for (const p of plan.pieces) {
+    const key = `${p.w}x${p.h}`;
+    if (!counts[key]) counts[key] = { w: p.w, h: p.h, count: 0, name: p.name, type: p.type };
+    counts[key].count++;
+  }
+
+  let totalKg = 0;
+  let html = '';
+
+  for (const item of Object.values(counts)) {
+    const volumeM3 = (item.w / 100) * (item.h / 100) * lengthM * item.count;
+    const kg = volumeM3 * density;
+    totalKg += kg;
+    html += `
+      <div class="weight-item">
+        <div class="wi-val">${kg < 10 ? kg.toFixed(1) : Math.round(kg)} kg</div>
+        <div class="wi-label">${item.count}× ${item.w}×${item.h} cm</div>
+        <div class="wi-label" style="color:var(--border-light);">${(volumeM3 * 1000).toFixed(1)} dm³</div>
+      </div>`;
+  }
+
+  document.getElementById('weightGrid').innerHTML = html;
+  document.getElementById('weightTotal').innerHTML = `
+    <span class="wt-label">Celková hmotnost</span>
+    <span class="wt-val">${totalKg < 100 ? totalKg.toFixed(1) : Math.round(totalKg)} kg</span>
+  `;
+
+  return totalKg;
+}
+
+// ─── HISTORY ─────────────────────────────────────────────────────────────────
+let currentResult = null;
+
+function saveToHistory() {
+  if (!currentResult) { alert('Nejprve spusťte výpočet.'); return; }
+
+  const history = getHistory();
+  const entry = {
+    id: Date.now(),
+    date: new Date().toLocaleString('cs-CZ'),
+    ...currentResult
+  };
+  history.unshift(entry);
+  // Keep max 20 entries
+  if (history.length > 20) history.pop();
+  localStorage.setItem('pilaHistory', JSON.stringify(history));
+  renderHistory();
+
+  // Visual feedback
+  const btn = document.querySelector('.btn-save-history');
+  btn.textContent = '✅ Uloženo!';
+  btn.style.borderColor = 'var(--green)';
+  btn.style.color = 'var(--green)';
+  setTimeout(() => {
+    btn.textContent = '💾 Uložit do historie';
+    btn.style.borderColor = '';
+    btn.style.color = '';
+  }, 2000);
+}
+
+function getHistory() {
+  try { return JSON.parse(localStorage.getItem('pilaHistory') || '[]'); }
+  catch { return []; }
+}
+
+function renderHistory() {
+  const history = getHistory();
+  const count = history.length;
+  document.getElementById('historyCount').textContent = count;
+
+  const list = document.getElementById('historyList');
+  if (count === 0) {
+    list.innerHTML = '<div class="history-empty">ŽÁDNÉ ZÁZNAMY<br>Spusťte výpočet a uložte ho</div>';
+    return;
+  }
+
+  list.innerHTML = history.map(e => `
+    <div class="history-item" onclick="loadFromHistory(${e.id})">
+      <button class="hi-del" onclick="event.stopPropagation(); deleteHistory(${e.id})">✕</button>
+      <div class="hi-date">${e.date}</div>
+      <div class="hi-title">${e.species} — ⌀${e.dMin} cm × ${e.length} cm</div>
+      <div class="hi-detail">${e.products} | ${e.weight} kg | výtěžnost ${e.efficiency}%</div>
+    </div>
+  `).join('');
+}
+
+function deleteHistory(id) {
+  const history = getHistory().filter(e => e.id !== id);
+  localStorage.setItem('pilaHistory', JSON.stringify(history));
+  renderHistory();
+}
+
+function clearHistory() {
+  if (confirm('Opravdu vymazat celou historii?')) {
+    localStorage.removeItem('pilaHistory');
+    renderHistory();
+  }
+}
+
+function loadFromHistory(id) {
+  const entry = getHistory().find(e => e.id === id);
+  if (!entry) return;
+  document.getElementById('dStart').value = entry.dStart || '';
+  document.getElementById('dMid').value = entry.dMid || '';
+  document.getElementById('dEnd').value = entry.dEnd || '';
+  document.getElementById('length').value = entry.length || '';
+  document.querySelectorAll('.species-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.sp === entry.speciesKey);
+  });
+  selectedSpecies = entry.speciesKey || 'smrk';
+  showSpeciesInfo(selectedSpecies);
+  switchTab('rezny');
+  calculate();
+}
+
+function switchTab(name) {
+  // Update nav buttons
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  // Show/hide tab pages
+  document.querySelectorAll('.tab-page').forEach(p => p.classList.remove('active'));
+  const page = document.getElementById('page-' + name);
+  if (page) page.classList.add('active');
+  // Hide main layout when on other tabs
+  const mainLayout = document.querySelector('.main-layout');
+  mainLayout.style.display = (name === 'rezny') ? 'grid' : 'none';
+  if (name === 'historie') renderHistory();
+}
+
+function toggleHistory() {
+  switchTab('historie');
+}
+
+// Init history count on load
+renderHistory();
+</script>
+</body>
+</html>
