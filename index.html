@@ -1988,9 +1988,9 @@ function switchTab(name) {
   document.querySelectorAll('.tab-page').forEach(p => p.classList.remove('active'));
   const page = document.getElementById('page-' + name);
   if (page) page.classList.add('active');
-  // Hide main layout when on other tabs
+  // Hide/show main layout
   const mainLayout = document.querySelector('.main-layout');
-  mainLayout.style.display = (name === 'rezny') ? 'grid' : 'none';
+  mainLayout.style.display = (name === 'rezny') ? '' : 'none';
   if (name === 'historie') renderHistory();
 }
 
