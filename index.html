@@ -1257,22 +1257,22 @@
       <div class="sort-card active" data-type="tram" onclick="toggleSort(this)">
         <div class="check">✓</div>
         <div class="sort-name">Trám</div>
-        <div class="sort-dim">10×10, 12×12, 15×15 cm</div>
+        <div class="sort-dim">8×8, 10×10, 12×12, 15×15 cm</div>
       </div>
       <div class="sort-card active" data-type="prkno" onclick="toggleSort(this)">
         <div class="check">✓</div>
         <div class="sort-name">Prkno</div>
-        <div class="sort-dim">tl. 2–3 cm, š. 15–25 cm</div>
+        <div class="sort-dim">tl. 2–3 cm, š. dle průměru</div>
       </div>
       <div class="sort-card active" data-type="fosnka" onclick="toggleSort(this)">
         <div class="check">✓</div>
         <div class="sort-name">Fošna</div>
-        <div class="sort-dim">tl. 4–6 cm, š. 15–25 cm</div>
+        <div class="sort-dim">tl. 4–6 cm, š. dle průměru</div>
       </div>
       <div class="sort-card active" data-type="hranol" onclick="toggleSort(this)">
         <div class="check">✓</div>
         <div class="sort-name">Hranol</div>
-        <div class="sort-dim">6×8, 8×10, 10×12 cm</div>
+        <div class="sort-dim">8×6, 10×6, 10×8, 12×8, 12×10, 15×10 cm</div>
       </div>
     </div>
 
@@ -1663,54 +1663,107 @@ function selectThickness(btn) {
   selectedThickness = parseInt(btn.dataset.t);
 }
 
-function findBestPlan(rEff, kerfCm, priority) {
-  const pieces = [];
-  const kerfH = kerfCm; // kerf in cm
+function maxWidthAtY(centerY, h, r) {
+  // Worst corner is at |centerY| + h/2 from center vertically
+  const yEdge = Math.abs(centerY) + h / 2;
+  if (yEdge >= r) return 0;
+  const halfW = Math.sqrt(r * r - yEdge * yEdge);
+  return Math.floor(halfW * 2); // whole cm
+}
 
-  // Determine thickness sequence to try
-  // For each "row" from top to bottom, pick best fitting thickness
+function findBestPlan(rEff, kerfCm, priority) {
   const thickOptions = selectedThickness === 0
-    ? [6, 5, 4, 3, 2]   // auto: try all
+    ? [4, 3, 5, 2, 6]
     : [selectedThickness, ...([6,5,4,3,2].filter(t => t !== selectedThickness))];
 
-  // Slice from top of circle downward
-  let y = rEff; // current top edge, moving down
+  let topEdge = rEff - 0.01;
+  const pieces = [];
   let totalArea = 0;
+  let iterations = 0;
 
-  while (y > -rEff) {
+  while (iterations++ < 200) {
     let placed = false;
 
-    for (const t of thickOptions) {
-      const centerY = y - t / 2; // center of this plank
-      const w = maxWidthAtY(centerY, t, rEff);
-
-      if (w < 2) break; // too narrow, stop
-
-      // Determine type based on thickness
-      let type = 'prkno';
-      let name = `Prkno ${w}×${t}`;
-      if (t >= 6) { type = 'fosnka'; name = `Fošna ${w}×${t}`; }
-      else if (t >= 4) { type = 'fosnka'; name = `Fošna ${w}×${t}`; }
-      else if (t >= 3) { type = 'prkno'; name = `Prkno ${w}×${t}`; }
-
-      // Override with priority
-      if (priority === 'tram' && w === t && t >= 8) { type = 'tram'; name = `Trám ${w}×${t}`; }
-      if (priority === 'hranol' && t >= 6 && w > t) { type = 'hranol'; name = `Hranol ${w}×${t}`; }
-
-      pieces.push({
-        w, h: t,
-        x: 0, y: centerY,
-        name, type,
-        label: centerY > 0 ? 'nahoře' : centerY < 0 ? 'dole' : 'střed'
-      });
-
-      totalArea += w * t;
-      y = y - t - kerfH; // move down by thickness + kerf
-      placed = true;
-      break;
+    // 1) Zkus trámy — čtvercové průřezy (pokud jsou aktivní)
+    if (activeTypes.has('tram')) {
+      const tramSizes = [15, 12, 10, 8];
+      for (const s of tramSizes) {
+        const bottomEdge = topEdge - s;
+        if (bottomEdge < -rEff) continue;
+        const centerY = (topEdge + bottomEdge) / 2;
+        const w = maxWidthAtY(centerY, s, rEff);
+        if (w >= s) {
+          pieces.push({ w: s, h: s, x: 0, y: centerY, name: `Trám ${s}×${s}`, type: 'tram', label: centerY >= 0 ? 'nahoře' : 'dole' });
+          totalArea += s * s;
+          topEdge = bottomEdge - kerfCm;
+          placed = true;
+          break;
+        }
+      }
+      if (placed) continue;
     }
 
-    if (!placed) break;
+    // 2) Zkus hranoly — obdélníkové (pokud jsou aktivní)
+    if (!placed && activeTypes.has('hranol')) {
+      const hranolSizes = [
+        {w:15,h:10},{w:12,h:10},{w:12,h:8},{w:10,h:8},{w:10,h:6},{w:8,h:6}
+      ];
+      for (const hs of hranolSizes) {
+        const bottomEdge = topEdge - hs.h;
+        if (bottomEdge < -rEff) continue;
+        const centerY = (topEdge + bottomEdge) / 2;
+        const w = maxWidthAtY(centerY, hs.h, rEff);
+        if (w >= hs.w) {
+          pieces.push({ w: hs.w, h: hs.h, x: 0, y: centerY, name: `Hranol ${hs.w}×${hs.h}`, type: 'hranol', label: centerY >= 0 ? 'nahoře' : 'dole' });
+          totalArea += hs.w * hs.h;
+          topEdge = bottomEdge - kerfCm;
+          placed = true;
+          break;
+        }
+      }
+      if (placed) continue;
+    }
+
+    // 3) Zkus fošny (tl. 4–6 cm) — pokud aktivní
+    if (!placed && activeTypes.has('fosnka')) {
+      const fosnaThick = thickOptions.filter(t => t >= 4);
+      for (const t of (fosnaThick.length ? fosnaThick : [4,5,6])) {
+        const bottomEdge = topEdge - t;
+        if (bottomEdge < -rEff) continue;
+        const centerY = (topEdge + bottomEdge) / 2;
+        const w = maxWidthAtY(centerY, t, rEff);
+        if (w < 2) continue;
+        pieces.push({ w, h: t, x: 0, y: centerY, name: `Fošna ${w}×${t}`, type: 'fosnka', label: centerY >= 0 ? 'nahoře' : 'dole' });
+        totalArea += w * t;
+        topEdge = bottomEdge - kerfCm;
+        placed = true;
+        break;
+      }
+      if (placed) continue;
+    }
+
+    // 4) Zkus prkna (tl. 2–3 cm) — pokud aktivní
+    if (!placed && activeTypes.has('prkno')) {
+      const prknoThick = thickOptions.filter(t => t <= 3);
+      for (const t of (prknoThick.length ? prknoThick : [3,2])) {
+        const bottomEdge = topEdge - t;
+        if (bottomEdge < -rEff) continue;
+        const centerY = (topEdge + bottomEdge) / 2;
+        const w = maxWidthAtY(centerY, t, rEff);
+        if (w < 2) continue;
+        pieces.push({ w, h: t, x: 0, y: centerY, name: `Prkno ${w}×${t}`, type: 'prkno', label: centerY >= 0 ? 'nahoře' : 'dole' });
+        totalArea += w * t;
+        topEdge = bottomEdge - kerfCm;
+        placed = true;
+        break;
+      }
+      if (placed) continue;
+    }
+
+    if (!placed) {
+      topEdge -= 0.1;
+      if (topEdge < -rEff + 1) break;
+    }
   }
 
   if (pieces.length === 0) return null;
@@ -1888,73 +1941,120 @@ function getCuts(pieces, cx, cy, scale) {
 function buildSteps(plan, rEff, kerf, dStart, dMid, dEnd, length) {
   const steps = [];
   const kerfCm = kerf / 10;
+  const dMin = Math.min(dStart, dMid || dEnd, dEnd);
+
+  // Sort pieces top to bottom
+  const sorted = [...plan.pieces].sort((a, b) => b.y - a.y);
+  const maxW = Math.max(...plan.pieces.map(p => p.w));
+
+  // When log lies on rail (curved bottom), center is at rEff height above rail
+  // Rail = 0, bottom of log touches rail at lowest point = 0
+  // Center of log = rEff above rail
+  // Top of log = rEff * 2 above rail
+  const logCenter = rEff; // height of log center above rail
+  const logTop = rEff * 2; // height of log top above rail
+
+  // Slabina top = how much to cut off the top
+  const topPiece = sorted[0];
+  const slabTop = rEff - (topPiece.y + topPiece.h / 2);
+  // First cut height = logTop - slabTop = where the blade goes for first cut
+  const cut1Height = (logTop - slabTop).toFixed(1);
+
+  // Side slabina
+  const slabSide = ((rEff * 2 - maxW) / 2).toFixed(1);
 
   steps.push({
-    action: 'Příprava a kontrola kulatiny',
-    detail: `Změřte průměry: začátek <strong>${dStart} cm</strong>, střed <strong>${dMid || '—'} cm</strong>, konec <strong>${dEnd} cm</strong>. Délka: <strong>${length} cm</strong>. Odstraňte kůru a hrubé větve. Kritické místo (nejtenčí průměr) je rozhodující pro všechny řezy.`,
+    action: '🔍 Příprava — změření klády',
+    detail: `Průměry: začátek <strong>${dStart} cm</strong>, střed <strong>${dMid || dEnd} cm</strong>, konec <strong>${dEnd} cm</strong>, délka <strong>${length} cm</strong>. Nejtenčí průměr = <strong>${dMin} cm</strong> — podle něj se počítají všechny řezy. Odstraňte kůru.`,
     measure: null,
   });
 
   steps.push({
-    action: 'Upnutí kulatiny na pilu',
-    detail: `Upněte kulatinu tak, aby osa kulatiny byla rovnoběžná s osou pily. Zkontrolujte rovinu uložení — použijte klíny pokud je kulatina nestabilní.`,
+    action: '📐 Uložení klády na kolejnici — základní poloha',
+    detail: `Položte kládu na kolejnici kulatou stranou dolů. Zajistěte ji aby se nekutálela (klíny nebo upínky). Kláda leží volně — spodek se dotýká kolejnice.`,
     measure: null,
   });
 
-  // Find central piece
-  const center = plan.pieces.find(p => p.label === 'střed') || plan.pieces[0];
-
-  // First slab (flattening)
-  const firstCutH = rEff - center.h / 2;
   steps.push({
-    action: 'První řez — odřezání bočního klínu',
-    detail: `Nastavte list pily na výšku <strong>${firstCutH.toFixed(1)} cm</strong> od spodní osy. Odřízněte spodní klín, aby vznikla rovná plocha. Tento odřezek je odpad (nebo štěpka).`,
-    measure: `Výška řezu: ${firstCutH.toFixed(1)} cm`,
+    action: `🪚 Řez č. 1 — odříznutí vrchního klínu`,
+    detail: `Nastav pás na displeji na <strong>${cut1Height} cm</strong>. Projeď celou délku klády. Odřízne se horní klín (slabina <strong>${slabTop.toFixed(1)} cm</strong>). Vznikne rovná horní plocha — odřezek je odpad.`,
+    measure: `Výška pásu: ${cut1Height} cm`,
   });
 
   steps.push({
-    action: 'Otočení kulatiny o 180°',
-    detail: `Otočte kulatinu o 180° a opřete ji o čerstvě odřezanou rovnou plochu. Upněte znovu. Nyní odřízněte druhý klín symetricky — výška řezu opět <strong>${firstCutH.toFixed(1)} cm</strong>.`,
-    measure: `Výška řezu: ${firstCutH.toFixed(1)} cm`,
+    action: '🔄 Otočení klády o 90° doleva',
+    detail: `Otočte kládu o <strong>90° doleva</strong> — čerstvě odřezaná rovná plocha leží nyní na kolejnici. Upněte znovu. Teď je rovná plocha dole, kulatá strana je nahoře a z boku.`,
+    measure: null,
   });
 
-  // Now cut the main beam
-  const beamH = center.h;
-  const beamW = center.w;
+  // After rotating 90°, the flat face is on rail
+  // log height now = dMin (full diameter) but flat on one side
+  // Side slabina cut: blade at slabSide height above rail... 
+  // Actually the log is now resting on flat face, height = rEff * 2 - slabTop
+  const logHeightAfterCut1 = (rEff * 2 - slabTop).toFixed(1);
+  const cut2Height = (parseFloat(logHeightAfterCut1) - parseFloat(slabSide)).toFixed(1);
+
   steps.push({
-    action: `Řezání středového ${center.type === 'tram' ? 'trámu' : center.type === 'hranol' ? 'hranolu' : 'kusu'} ${beamW}×${beamH} cm`,
-    detail: `Nastavte vzdálenost listů (nebo dorazy) na <strong>${beamW} cm</strong> šířku. Prořízněte celou délku. Tím získáte hlavní sortiment — <strong>${center.name}</strong>.`,
-    measure: `${beamW} × ${beamH} cm`,
+    action: `🪚 Řez č. 2 — odříznutí levého klínu`,
+    detail: `Nastav pás na <strong>${cut2Height} cm</strong>. Projeď celou délku. Odřízne se levý klín (<strong>${slabSide} cm</strong>). Vznikne rovná levá plocha.`,
+    measure: `Výška pásu: ${cut2Height} cm`,
   });
 
-  // Side boards
-  const sideBoards = plan.pieces.filter(p => p.label === 'nad středem' || p.label === 'pod středem');
-  if (sideBoards.length >= 2) {
-    const sb = sideBoards[0];
-    const sbY = Math.abs(sb.y);
-    const cutFromEdge = sbY - sb.h / 2;
+  steps.push({
+    action: '🔄 Otočení klády o 90° doleva',
+    detail: `Otočte o <strong>90° doleva</strong> — teď máte dvě rovné plochy (spodní a levá). Uložte na kolejnici tak aby rovná plocha byla dole.`,
+    measure: null,
+  });
 
+  const cut3Height = (parseFloat(logHeightAfterCut1) - parseFloat(slabSide)).toFixed(1);
+
+  steps.push({
+    action: `🪚 Řez č. 3 — odříznutí pravého klínu`,
+    detail: `Nastav pás na <strong>${cut3Height} cm</strong>. Projeď celou délku. Odřízne se pravý klín. Teď máte tři rovné strany.`,
+    measure: `Výška pásu: ${cut3Height} cm`,
+  });
+
+  steps.push({
+    action: '🔄 Otočení o 90° doleva',
+    detail: `Otočte o <strong>90° doleva</strong> — poslední kulatá strana je nahoře. Výsledkem bude čistý hranol <strong>${maxW} cm</strong> šířky.`,
+    measure: null,
+  });
+
+  const cut4Height = (parseFloat(logHeightAfterCut1) - parseFloat(slabTop)).toFixed(1);
+
+  steps.push({
+    action: `🪚 Řez č. 4 — odříznutí spodního klínu → čistý hranol`,
+    detail: `Nastav pás na <strong>${cut4Height} cm</strong>. Po tomto řezu máte <strong>čistý hranol</strong> připravený na rozřezání na prkna.`,
+    measure: `Výška pásu: ${cut4Height} cm → hranol ${maxW} cm šířka`,
+  });
+
+  // Now cut boards — hranol leží na kolejnici, řežeme shora dolů
+  // Hranol height = total height of all pieces + kerfs
+  const hranolHeight = sorted.reduce((s, p) => s + p.h, 0) + (sorted.length - 1) * kerfCm;
+  
+  steps.push({
+    action: '↩️ Hranol leží na kolejnici — řezání prken shora dolů',
+    detail: `Uložte hranol naplocho na kolejnici. Budete řezat od vrchu dolů — každý řez = jedno prkno nebo fošna. Výška hranolu na kolejnici = <strong>${hranolHeight.toFixed(1)} cm</strong>.`,
+    measure: null,
+  });
+
+  let currentHeight = hranolHeight;
+  let stepNum = 5;
+  for (let i = 0; i < sorted.length; i++) {
+    const p = sorted[i];
+    const typeName = { tram: 'trám', hranol: 'hranol', prkno: 'prkno', fosnka: 'fošna' }[p.type] || 'kus';
+    currentHeight -= p.h;
     steps.push({
-      action: `Otočení o 90° — řezání ${sb.type === 'prkno' ? 'prken' : 'fošen'}`,
-      detail: `Otočte čerstvě ořezaný blok o 90°. Ze zbývajícího dřeva nad a pod středovým kusem vyřízněte <strong>${sb.name}</strong>. Nastavte první řez na výšku <strong>${cutFromEdge.toFixed(1)} cm</strong> od hrany bloku.`,
-      measure: `1. řez: ${cutFromEdge.toFixed(1)} cm, pak každých ${(sb.h + kerfCm).toFixed(1)} cm`,
+      action: `🪚 Řez č. ${stepNum++} — ${typeName} ${p.w}×${p.h} cm`,
+      detail: `Nastav pás na <strong>${currentHeight.toFixed(1)} cm</strong>. Projeď celou délku <strong>${length} cm</strong>. Vznikne: <strong>${p.name}</strong>.`,
+      measure: `Výška pásu: ${currentHeight.toFixed(1)} cm`,
     });
+    currentHeight -= kerfCm;
   }
 
-  // Side pieces
-  const sidePieces = plan.pieces.filter(p => p.label === 'vpravo' || p.label === 'vlevo');
-  if (sidePieces.length >= 2) {
-    const sp = sidePieces[0];
-    steps.push({
-      action: `Řezání bočních ${sp.type === 'prkno' ? 'prken' : 'fošen'} z bočních klínů`,
-      detail: `Z bočních klínů (odřezky z prvních dvou řezů) lze vyřezat úzká prkna <strong>${sp.w}×${sp.h} cm</strong> v délce <strong>${length} cm</strong>. Přeřízněte klíny na tabuli a odřízněte kulatou stranu.`,
-      measure: `${sp.w} × ${sp.h} cm`,
-    });
-  }
-
   steps.push({
-    action: 'Finální kontrola a třídění',
-    detail: `Změřte všechny vyřezané kusy. Zkontrolujte rovnost a případné trhliny (výkyvy vlhkosti). Složte na rovnou plochu s mezerami pro sušení. Minimální vzdálenost mezi vrstvami: <strong>2–3 cm</strong> (prokládky).`,
+    action: '✅ Finální kontrola a skládání',
+    detail: `Změřte všechny kusy. Prokládejte latěmi (2–3 cm mezera) pro sušení vzduchu. Kusy stejného rozměru skládejte na sebe.`,
     measure: null,
   });
 
