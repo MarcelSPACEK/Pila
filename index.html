@@ -1257,12 +1257,12 @@
       <div class="sort-card active" data-type="tram" onclick="toggleSort(this)">
         <div class="check">✓</div>
         <div class="sort-name">Trám</div>
-        <div class="sort-dim">12×12, 14×14, 16×16, 18×18, 20×20 cm</div>
+        <div class="sort-dim">8×8 až 20×20 cm</div>
       </div>
       <div class="sort-card active" data-type="hranol" onclick="toggleSort(this)">
         <div class="check">✓</div>
         <div class="sort-name">Hranol</div>
-        <div class="sort-dim">6×8, 8×8, 8×10, 10×10, 10×12, 12×12 cm</div>
+        <div class="sort-dim">6×8, 8×10, 10×12, 12×14 cm</div>
       </div>
       <div class="sort-card active" data-type="fosnka" onclick="toggleSort(this)">
         <div class="check">✓</div>
@@ -1277,7 +1277,7 @@
       <div class="sort-card" data-type="lat" onclick="toggleSort(this)">
         <div class="check">✓</div>
         <div class="sort-name">Lať</div>
-        <div class="sort-dim">3×5, 4×6, 5×5 cm</div>
+        <div class="sort-dim">3×5, 4×4, 4×6, 5×5, 6×4 cm</div>
       </div>
     </div>
 
@@ -1710,10 +1710,10 @@ function findBestPlan(rEff, kerfCm, priority) {
   // Rozměry sortimentů
   const TRAM_SIZES   = [20, 18, 16, 14, 12, 10, 8];
   const HRANOL_SIZES = [
-    {w:12,h:12},{w:12,h:10},{w:10,h:12},{w:10,h:10},
-    {w:10,h:8},{w:8,h:10},{w:8,h:8},{w:8,h:6},{w:6,h:8},{w:6,h:6}
+    {w:14,h:12},{w:12,h:14},{w:12,h:10},{w:10,h:12},
+    {w:10,h:8},{w:8,h:10},{w:8,h:6},{w:6,h:8}
   ];
-  const LAT_SIZES = [{w:6,h:4},{w:5,h:5},{w:4,h:6},{w:3,h:5},{w:5,h:3}];
+  const LAT_SIZES = [{w:6,h:4},{w:5,h:5},{w:4,h:6},{w:4,h:4},{w:3,h:5},{w:5,h:3}];
 
   // Fill a vertical range with boards (prkna/fošny/latě)
   function fillBoards(topEdge, bottomLimit, pieces, areaRef) {
