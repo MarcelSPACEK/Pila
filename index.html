@@ -1719,37 +1719,57 @@ function findBestPlan(rEff, kerfCm, priority) {
   function fillBoards(topEdge, bottomLimit, pieces, areaRef) {
     let te = topEdge;
     let noFit = 0;
+
+    // Sestav seznam tloušťek které smíme použít dle zakliknutých kategorií
+    const allowedThicks = [];
+    if (hasFosnka) fosnkaThicks.forEach(t => { if (!allowedThicks.includes(t)) allowedThicks.push(t); });
+    if (hasPrkno)  prknoThicks.forEach(t  => { if (!allowedThicks.includes(t)) allowedThicks.push(t); });
+    // Seřaď: preferovaná tloušťka první, zbytek od největší
+    allowedThicks.sort((a,b) => {
+      if (selectedThickness > 0) {
+        if (a === selectedThickness) return -1;
+        if (b === selectedThickness) return 1;
+      }
+      return b - a;
+    });
+
     while (noFit < 60) {
       let best = null;
-      if (hasFosnka) {
-        for (const t of fosnkaThicks) {
-          const bot = te - t;
-          if (bot < bottomLimit - 0.05) continue;
-          const cy = (te+bot)/2;
-          const w = maxWidthAtY(cy, t, rEff);
-          if (w >= 2) { const a=w*t; if(!best||a>best.area) best={w,h:t,bot,cy,area:a,type:'fosnka',name:`Fošna ${w}×${t} cm`}; break; }
+
+      // Zkus prkna/fošny
+      for (const t of allowedThicks) {
+        const bot = te - t;
+        if (bot < bottomLimit - 0.05) continue;
+        const cy = (te+bot)/2;
+        const w = maxWidthAtY(cy, t, rEff);
+        if (w >= 2) {
+          const a = w * t;
+          const type = t > 3.5 ? 'fosnka' : 'prkno';
+          const label = t > 3.5 ? 'Fošna' : 'Prkno';
+          if (!best || a > best.area)
+            best = {w, h:t, bot, cy, area:a, type, name:`${label} ${w}×${(t*10).toFixed(0)} mm`};
+          break; // první která se vejde při dané tloušťce
         }
       }
-      if (hasPrkno) {
-        for (const t of prknoThicks) {
-          const bot = te - t;
-          if (bot < bottomLimit - 0.05) continue;
-          const cy = (te+bot)/2;
-          const w = maxWidthAtY(cy, t, rEff);
-          if (w >= 2) { const a=w*t; if(!best||a>best.area) best={w,h:t,bot,cy,area:a,type:'prkno',name:`Prkno ${w}×${t} cm`}; break; }
-        }
-      }
+
+      // Zkus latě
       if (hasLat) {
         for (const ls of LAT_SIZES) {
           const bot = te - ls.h;
           if (bot < bottomLimit - 0.05) continue;
           const cy = (te+bot)/2;
           const w = maxWidthAtY(cy, ls.h, rEff);
-          if (w >= ls.w) { const a=ls.w*ls.h; if(!best||a>best.area) best={w:ls.w,h:ls.h,bot,cy,area:a,type:'lat',name:`Lať ${ls.w}×${ls.h} cm`}; break; }
+          if (w >= ls.w) {
+            const a = ls.w * ls.h;
+            if (!best || a > best.area)
+              best = {w:ls.w, h:ls.h, bot, cy, area:a, type:'lat', name:`Lať ${ls.w}×${ls.h} cm`};
+            break;
+          }
         }
       }
+
       if (best) {
-        pieces.push({w:best.w,h:best.h,x:0,y:best.cy,name:best.name,type:best.type,label:best.cy>=0?'nahoře':'dole'});
+        pieces.push({w:best.w, h:best.h, x:0, y:best.cy, name:best.name, type:best.type, label:best.cy>=0?'nahoře':'dole'});
         areaRef.v += best.area;
         te = best.bot - kerfCm;
         noFit = 0;
