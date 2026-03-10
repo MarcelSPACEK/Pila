@@ -1676,94 +1676,70 @@ function findBestPlan(rEff, kerfCm, priority) {
     ? [4, 3, 5, 2, 6]
     : [selectedThickness, ...([6,5,4,3,2].filter(t => t !== selectedThickness))];
 
+  // Build full candidate list for each row
+  function getBestAt(topEdge) {
+    let best = null;
+
+    // Helper - check one piece
+    function tryPiece(w, h, type, name) {
+      const bot = topEdge - h;
+      if (bot < -rEff) return;
+      const cy = (topEdge + bot) / 2;
+      const avail = maxWidthAtY(cy, h, rEff);
+      if (avail < w) return;
+      const area = w * h;
+      if (!best || area > best.area) {
+        best = { w, h, type, name, bot, area, cy };
+      }
+    }
+
+    if (activeTypes.has('tram')) {
+      for (const s of [15, 12, 10, 8]) tryPiece(s, s, 'tram', `Trám ${s}×${s}`);
+    }
+    if (activeTypes.has('hranol')) {
+      for (const hs of [{w:15,h:10},{w:12,h:10},{w:12,h:8},{w:10,h:8},{w:10,h:6},{w:8,h:6}]) {
+        tryPiece(hs.w, hs.h, 'hranol', `Hranol ${hs.w}×${hs.h}`);
+      }
+    }
+    if (activeTypes.has('fosnka')) {
+      for (const t of [6, 5, 4]) {
+        const bot = topEdge - t;
+        if (bot < -rEff) continue;
+        const cy = (topEdge + bot) / 2;
+        const w = maxWidthAtY(cy, t, rEff);
+        if (w >= 2) { tryPiece(w, t, 'fosnka', `Fošna ${w}×${t}`); break; }
+      }
+    }
+    if (activeTypes.has('prkno')) {
+      for (const t of thickOptions.filter(t => t <= 3).concat([3, 2])) {
+        const bot = topEdge - t;
+        if (bot < -rEff) continue;
+        const cy = (topEdge + bot) / 2;
+        const w = maxWidthAtY(cy, t, rEff);
+        if (w >= 2) { tryPiece(w, t, 'prkno', `Prkno ${w}×${t}`); break; }
+      }
+    }
+    return best;
+  }
+
+  // Main loop — try each position, skip 1mm if nothing fits
   let topEdge = rEff - 0.01;
   const pieces = [];
   let totalArea = 0;
-  let iterations = 0;
+  let noFitMm = 0;
 
-  while (iterations++ < 200) {
-    let placed = false;
-
-    // 1) Zkus trámy — čtvercové průřezy (pokud jsou aktivní)
-    if (activeTypes.has('tram')) {
-      const tramSizes = [15, 12, 10, 8];
-      for (const s of tramSizes) {
-        const bottomEdge = topEdge - s;
-        if (bottomEdge < -rEff) continue;
-        const centerY = (topEdge + bottomEdge) / 2;
-        const w = maxWidthAtY(centerY, s, rEff);
-        if (w >= s) {
-          pieces.push({ w: s, h: s, x: 0, y: centerY, name: `Trám ${s}×${s}`, type: 'tram', label: centerY >= 0 ? 'nahoře' : 'dole' });
-          totalArea += s * s;
-          topEdge = bottomEdge - kerfCm;
-          placed = true;
-          break;
-        }
-      }
-      if (placed) continue;
-    }
-
-    // 2) Zkus hranoly — obdélníkové (pokud jsou aktivní)
-    if (!placed && activeTypes.has('hranol')) {
-      const hranolSizes = [
-        {w:15,h:10},{w:12,h:10},{w:12,h:8},{w:10,h:8},{w:10,h:6},{w:8,h:6}
-      ];
-      for (const hs of hranolSizes) {
-        const bottomEdge = topEdge - hs.h;
-        if (bottomEdge < -rEff) continue;
-        const centerY = (topEdge + bottomEdge) / 2;
-        const w = maxWidthAtY(centerY, hs.h, rEff);
-        if (w >= hs.w) {
-          pieces.push({ w: hs.w, h: hs.h, x: 0, y: centerY, name: `Hranol ${hs.w}×${hs.h}`, type: 'hranol', label: centerY >= 0 ? 'nahoře' : 'dole' });
-          totalArea += hs.w * hs.h;
-          topEdge = bottomEdge - kerfCm;
-          placed = true;
-          break;
-        }
-      }
-      if (placed) continue;
-    }
-
-    // 3) Zkus fošny (tl. 4–6 cm) — pokud aktivní
-    if (!placed && activeTypes.has('fosnka')) {
-      const fosnaThick = thickOptions.filter(t => t >= 4);
-      for (const t of (fosnaThick.length ? fosnaThick : [4,5,6])) {
-        const bottomEdge = topEdge - t;
-        if (bottomEdge < -rEff) continue;
-        const centerY = (topEdge + bottomEdge) / 2;
-        const w = maxWidthAtY(centerY, t, rEff);
-        if (w < 2) continue;
-        pieces.push({ w, h: t, x: 0, y: centerY, name: `Fošna ${w}×${t}`, type: 'fosnka', label: centerY >= 0 ? 'nahoře' : 'dole' });
-        totalArea += w * t;
-        topEdge = bottomEdge - kerfCm;
-        placed = true;
-        break;
-      }
-      if (placed) continue;
-    }
-
-    // 4) Zkus prkna (tl. 2–3 cm) — pokud aktivní
-    if (!placed && activeTypes.has('prkno')) {
-      const prknoThick = thickOptions.filter(t => t <= 3);
-      for (const t of (prknoThick.length ? prknoThick : [3,2])) {
-        const bottomEdge = topEdge - t;
-        if (bottomEdge < -rEff) continue;
-        const centerY = (topEdge + bottomEdge) / 2;
-        const w = maxWidthAtY(centerY, t, rEff);
-        if (w < 2) continue;
-        pieces.push({ w, h: t, x: 0, y: centerY, name: `Prkno ${w}×${t}`, type: 'prkno', label: centerY >= 0 ? 'nahoře' : 'dole' });
-        totalArea += w * t;
-        topEdge = bottomEdge - kerfCm;
-        placed = true;
-        break;
-      }
-      if (placed) continue;
-    }
-
-    if (!placed) {
+  while (noFitMm < 150) {
+    const p = getBestAt(topEdge);
+    if (p) {
+      pieces.push({ w: p.w, h: p.h, x: 0, y: p.cy, name: p.name, type: p.type, label: p.cy >= 0 ? 'nahoře' : 'dole' });
+      totalArea += p.area;
+      topEdge = p.bot - kerfCm;
+      noFitMm = 0;
+    } else {
       topEdge -= 0.1;
-      if (topEdge < -rEff + 1) break;
+      noFitMm++;
     }
+    if (topEdge < -rEff + 0.5) break;
   }
 
   if (pieces.length === 0) return null;
