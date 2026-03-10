@@ -931,6 +931,230 @@
   }
   .btn-back:hover { background: #1a1500; border-color: var(--accent); }
 
+  /* ZAKAZKY */
+  .zakazka-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 16px;
+    margin-bottom: 12px;
+    transition: border-color 0.2s;
+  }
+
+  .zakazka-card:hover { border-color: var(--accent2); }
+
+  .zk-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 8px;
+  }
+
+  .zk-name {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.3rem;
+    letter-spacing: 2px;
+    color: var(--accent);
+  }
+
+  .zk-stav {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    padding: 3px 10px;
+    border-radius: 20px;
+    letter-spacing: 1px;
+  }
+
+  .stav-otevrena { background: #2a2200; border: 1px solid #6a5500; color: #d4a843; }
+  .stav-hotova   { background: #0f2a10; border: 1px solid #2a6a2a; color: #5a8a4a; }
+  .stav-zaplacena{ background: #0a2010; border: 1px solid #1a5a30; color: #3ab870; }
+
+  .zk-meta {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+
+  .zk-kulatiny {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+
+  .zk-kulatina-tag {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.68rem;
+    padding: 3px 8px;
+    color: var(--muted);
+  }
+
+  .zk-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+  }
+
+  .zk-cena {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.4rem;
+    color: var(--accent);
+    letter-spacing: 1px;
+  }
+
+  .zk-actions { display: flex; gap: 6px; }
+
+  .zk-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 5px 12px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .zk-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .zk-btn.delete:hover { border-color: #c04040; color: #c04040; }
+
+  .z-kulatina-row {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: 12px;
+    margin-bottom: 8px;
+  }
+
+  .z-kulatina-row .zkr-inputs {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr) auto;
+    gap: 8px;
+    align-items: end;
+  }
+
+  .z-souhrn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    padding: 16px;
+  }
+
+  .zs-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    font-size: 0.8rem;
+    font-family: 'IBM Plex Mono', monospace;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .zs-row:last-child { border-bottom: none; }
+  .zs-row .zs-label { color: var(--muted); }
+  .zs-row .zs-val { color: var(--text); }
+  .zs-row.total .zs-label { color: var(--accent); font-size: 0.9rem; }
+  .zs-row.total .zs-val { color: var(--accent); font-size: 0.9rem; }
+
+  .zakazky-empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--muted);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.8rem;
+    letter-spacing: 2px;
+  }
+
+  .zakazky-empty .big { font-size: 3rem; margin-bottom: 12px; opacity: 0.3; }
+
+  input[type=date] {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 12px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.9rem;
+    outline: none;
+    color-scheme: dark;
+  }
+
+  /* FIREBASE AUTH */
+  .auth-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+
+  .auth-user {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--muted);
+    letter-spacing: 1px;
+  }
+
+  .auth-user strong { color: var(--accent); }
+
+  .btn-login {
+    background: var(--accent);
+    border: none;
+    color: #000;
+    padding: 7px 14px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .btn-login:hover { background: #e8bc55; }
+
+  .btn-logout {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 6px 12px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-logout:hover { border-color: #c04040; color: #c04040; }
+
+  .sync-badge {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.65rem;
+    padding: 2px 8px;
+    letter-spacing: 1px;
+  }
+
+  .sync-ok { color: var(--green); }
+  .sync-pending { color: var(--accent); }
+
+  input[type=text] {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 12px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.9rem;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  input[type=text]:focus { border-color: var(--accent); }
+
+  @media (max-width: 600px) {
+    .z-kulatina-row .zkr-inputs { grid-template-columns: 1fr 1fr; }
+  }
+
   .btn-clear-history {
     background: none;
     border: 1px solid var(--border);
@@ -971,8 +1195,12 @@
   <nav class="top-nav">
     <button class="nav-tab active" onclick="switchTab('rezny')" id="tab-rezny">🪚 Řezný plán</button>
     <button class="nav-tab" onclick="switchTab('cena')" id="tab-cena">💰 Kalkulace ceny</button>
+    <button class="nav-tab" onclick="switchTab('zakazky')" id="tab-zakazky">📦 Zakázky <span id="zakazkyCount" class="history-badge">0</span></button>
     <button class="nav-tab" onclick="switchTab('historie')" id="tab-historie">📋 Historie <span id="historyCount" class="history-badge">0</span></button>
   </nav>
+  <div class="auth-bar" id="authBar">
+    <button class="btn-login" onclick="loginGoogle()">🔑 Přihlásit přes Google</button>
+  </div>
 </header>
 
 <div class="main-layout">
@@ -1206,6 +1434,71 @@
     </div>
     <div class="note-box" style="margin-top:16px;">
       <strong>💡 Tip:</strong> Vybrané dřevině se automaticky přizpůsobí koeficient obtížnosti řezání — přejděte nejprve na záložku <em>Řezný plán</em> a vyberte dřevinu.
+    </div>
+  </div>
+</div>
+
+<!-- ZAKAZKY TAB -->
+<div class="tab-page" id="page-zakazky">
+  <div class="tab-page-inner" style="max-width:900px;">
+    <button class="btn-back" onclick="switchTab('rezny')">← Zpět na řezný plán</button>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+      <div class="section-label" style="margin:0;border:none;padding:0;">// Zakázky 📦</div>
+      <button class="btn-calculate" style="width:auto;padding:10px 20px;font-size:1rem;margin:0;" onclick="openNewZakazka()">+ Nová zakázka</button>
+    </div>
+
+    <!-- Zakázky list -->
+    <div id="zakazkyList"></div>
+
+    <!-- New/Edit Zakázka Modal -->
+    <div id="zakazkaModal" style="display:none;">
+      <div class="divider"></div>
+      <div class="section-label" id="zakazkaModalTitle">// Nová zakázka</div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+        <div class="input-group" style="margin:0;">
+          <label>Jméno zákazníka</label>
+          <input type="text" id="zJmeno" placeholder="Jan Novák">
+        </div>
+        <div class="input-group" style="margin:0;">
+          <label>Datum zakázky</label>
+          <input type="date" id="zDatum">
+        </div>
+        <div class="input-group" style="margin:0;">
+          <label>Stav zakázky</label>
+          <select id="zStav">
+            <option value="otevrena">🟡 Otevřená</option>
+            <option value="hotova">🟢 Hotová</option>
+            <option value="zaplacena">✅ Zaplacená</option>
+          </select>
+        </div>
+        <div class="input-group" style="margin:0;">
+          <label>Vaše sazba za m³ <span class="unit-badge">Kč</span></label>
+          <input type="number" id="zSazba" placeholder="800" min="100" step="50">
+        </div>
+      </div>
+
+      <div class="input-group">
+        <label>Poznámka</label>
+        <input type="text" id="zPoznamka" placeholder="Např. dovézt v úterý, platba hotově...">
+      </div>
+
+      <!-- Kulatiny v zakázce -->
+      <div class="section-label" style="margin-top:16px;">// Kulatiny v zakázce</div>
+      <div id="zKulatinyList"></div>
+      <button class="btn-add-dim" onclick="addZKulatina()" style="margin-bottom:16px;">+ Přidat kulatinu</button>
+
+      <!-- Souhrn zakázky -->
+      <div class="z-souhrn" id="zSouhrn" style="display:none;">
+        <div class="section-label" style="margin-bottom:12px;">// Souhrn zakázky</div>
+        <div id="zSouhrnContent"></div>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-top:16px;">
+        <button class="btn-calculate" style="flex:1;margin:0;font-size:1rem;padding:12px;" onclick="saveZakazka()">💾 Uložit zakázku</button>
+        <button class="btn-calc-price" style="flex:0 0 auto;padding:12px 20px;" onclick="closeZakazkaModal()">Zrušit</button>
+      </div>
     </div>
   </div>
 </div>
@@ -2000,25 +2293,424 @@ function loadFromHistory(id) {
 }
 
 function switchTab(name) {
-  // Update nav buttons
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
-  // Show/hide tab pages
   document.querySelectorAll('.tab-page').forEach(p => p.classList.remove('active'));
   const page = document.getElementById('page-' + name);
   if (page) page.classList.add('active');
-  // Hide/show main layout
   const mainLayout = document.querySelector('.main-layout');
   mainLayout.style.display = (name === 'rezny') ? '' : 'none';
   if (name === 'historie') renderHistory();
+  if (name === 'zakazky') renderZakazky();
 }
 
 function toggleHistory() {
   switchTab('historie');
 }
 
-// Init history count on load
+// ─── ZAKÁZKY ─────────────────────────────────────────────────────────────────
+let editingZakazkaId = null;
+let zKulatinyIds = [];
+
+function getZakazky() {
+  try { return JSON.parse(localStorage.getItem('pilaZakazky') || '[]'); }
+  catch { return []; }
+}
+
+function saveZakazkyToStorage(data) {
+  localStorage.setItem('pilaZakazky', JSON.stringify(data));
+  updateZakazkyCount();
+}
+
+function updateZakazkyCount() {
+  const z = getZakazky();
+  document.getElementById('zakazkyCount').textContent = z.filter(x => x.stav === 'otevrena').length;
+}
+
+function openNewZakazka() {
+  editingZakazkaId = null;
+  zKulatinyIds = [];
+  document.getElementById('zakazkaModalTitle').textContent = '// Nová zakázka';
+  document.getElementById('zJmeno').value = '';
+  document.getElementById('zDatum').value = new Date().toISOString().split('T')[0];
+  document.getElementById('zStav').value = 'otevrena';
+  document.getElementById('zSazba').value = '';
+  document.getElementById('zPoznamka').value = '';
+  document.getElementById('zKulatinyList').innerHTML = '';
+  document.getElementById('zSouhrn').style.display = 'none';
+  addZKulatina();
+  document.getElementById('zakazkaModal').style.display = 'block';
+  document.getElementById('zakazkaModal').scrollIntoView({ behavior: 'smooth' });
+}
+
+function closeZakazkaModal() {
+  document.getElementById('zakazkaModal').style.display = 'none';
+  zKulatinyIds = [];
+}
+
+function addZKulatina() {
+  const id = Date.now();
+  zKulatinyIds.push(id);
+  const container = document.getElementById('zKulatinyList');
+  const row = document.createElement('div');
+  row.className = 'z-kulatina-row';
+  row.id = 'zkrow_' + id;
+  row.innerHTML = `
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:var(--muted);margin-bottom:8px;letter-spacing:1px;">KULATINA #${zKulatinyIds.length}</div>
+    <div class="zkr-inputs">
+      <div class="input-group" style="margin:0;">
+        <label>⌀ začátek <span class="unit-badge">cm</span></label>
+        <input type="number" id="zkds_${id}" placeholder="30" min="5" max="120" step="1" oninput="updateZSouhrn()">
+      </div>
+      <div class="input-group" style="margin:0;">
+        <label>⌀ střed <span class="unit-badge">cm</span></label>
+        <input type="number" id="zkdm_${id}" placeholder="27" min="5" max="120" step="1" oninput="updateZSouhrn()">
+      </div>
+      <div class="input-group" style="margin:0;">
+        <label>⌀ konec <span class="unit-badge">cm</span></label>
+        <input type="number" id="zkde_${id}" placeholder="22" min="5" max="120" step="1" oninput="updateZSouhrn()">
+      </div>
+      <div class="input-group" style="margin:0;">
+        <label>Délka <span class="unit-badge">cm</span></label>
+        <input type="number" id="zkdl_${id}" placeholder="400" min="50" max="2000" step="10" oninput="updateZSouhrn()">
+      </div>
+      <button class="btn-remove" style="margin-bottom:0;" onclick="removeZKulatina(${id})">✕</button>
+    </div>
+  `;
+  container.appendChild(row);
+}
+
+function removeZKulatina(id) {
+  document.getElementById('zkrow_' + id)?.remove();
+  zKulatinyIds = zKulatinyIds.filter(x => x !== id);
+  updateZSouhrn();
+}
+
+function calcM3fromLog(dStart, dMid, dEnd, lengthCm) {
+  // Huberova metoda: V = průřez středu × délka
+  const dMin = Math.min(dStart, dMid || dStart, dEnd);
+  const rEff = (dMin / 2) - 1; // mínus kůra
+  const areaM2 = Math.PI * (rEff / 100) * (rEff / 100);
+  return areaM2 * (lengthCm / 100);
+}
+
+function updateZSouhrn() {
+  const sazba = parseFloat(document.getElementById('zSazba').value) || 0;
+  let totalM3 = 0;
+  let validCount = 0;
+  const rows = [];
+
+  for (const id of zKulatinyIds) {
+    const ds = parseFloat(document.getElementById('zkds_' + id)?.value) || 0;
+    const dm = parseFloat(document.getElementById('zkdm_' + id)?.value) || 0;
+    const de = parseFloat(document.getElementById('zkde_' + id)?.value) || 0;
+    const dl = parseFloat(document.getElementById('zkdl_' + id)?.value) || 0;
+    if (ds > 0 && de > 0 && dl > 0) {
+      const m3 = calcM3fromLog(ds, dm, de, dl);
+      totalM3 += m3;
+      validCount++;
+      rows.push({ ds, dm, de, dl, m3 });
+    }
+  }
+
+  if (validCount === 0) { document.getElementById('zSouhrn').style.display = 'none'; return; }
+
+  const totalCena = sazba > 0 ? totalM3 * sazba : null;
+  let html = '';
+  rows.forEach((r, i) => {
+    html += `<div class="zs-row"><span class="zs-label">Kulatina ${i+1} (⌀${Math.min(r.ds,r.dm||r.ds,r.de)} cm, ${r.dl} cm)</span><span class="zs-val">${r.m3.toFixed(3)} m³</span></div>`;
+  });
+  html += `<div class="zs-row"><span class="zs-label">Celkem m³</span><span class="zs-val">${totalM3.toFixed(3)} m³</span></div>`;
+  if (totalCena !== null) {
+    html += `<div class="zs-row total"><span class="zs-label">CENA CELKEM</span><span class="zs-val">${Math.round(totalCena).toLocaleString('cs-CZ')} Kč</span></div>`;
+  }
+  document.getElementById('zSouhrnContent').innerHTML = html;
+  document.getElementById('zSouhrn').style.display = 'block';
+}
+
+function saveZakazka() {
+  const jmeno = document.getElementById('zJmeno').value.trim();
+  if (!jmeno) { alert('Zadejte jméno zákazníka.'); return; }
+
+  const kulatiny = [];
+  for (const id of zKulatinyIds) {
+    const ds = parseFloat(document.getElementById('zkds_' + id)?.value) || 0;
+    const dm = parseFloat(document.getElementById('zkdm_' + id)?.value) || 0;
+    const de = parseFloat(document.getElementById('zkde_' + id)?.value) || 0;
+    const dl = parseFloat(document.getElementById('zkdl_' + id)?.value) || 0;
+    if (ds > 0 && de > 0 && dl > 0) {
+      kulatiny.push({ ds, dm, de, dl, m3: calcM3fromLog(ds, dm, de, dl) });
+    }
+  }
+
+  if (kulatiny.length === 0) { alert('Přidejte alespoň jednu kulatinu s rozměry.'); return; }
+
+  const sazba = parseFloat(document.getElementById('zSazba').value) || 0;
+  const totalM3 = kulatiny.reduce((s, k) => s + k.m3, 0);
+  const totalCena = sazba > 0 ? Math.round(totalM3 * sazba) : null;
+
+  const zakazky = getZakazky();
+  const entry = {
+    id: editingZakazkaId || Date.now(),
+    jmeno,
+    datum: document.getElementById('zDatum').value,
+    stav: document.getElementById('zStav').value,
+    sazba,
+    poznamka: document.getElementById('zPoznamka').value.trim(),
+    kulatiny,
+    totalM3,
+    totalCena,
+    created: editingZakazkaId ? (zakazky.find(z => z.id === editingZakazkaId)?.created || Date.now()) : Date.now(),
+  };
+
+  if (editingZakazkaId) {
+    const idx = zakazky.findIndex(z => z.id === editingZakazkaId);
+    if (idx >= 0) zakazky[idx] = entry; else zakazky.unshift(entry);
+  } else {
+    zakazky.unshift(entry);
+  }
+
+  saveZakazkyToStorage(zakazky);
+  closeZakazkaModal();
+  renderZakazky();
+}
+
+function editZakazka(id) {
+  const z = getZakazky().find(x => x.id === id);
+  if (!z) return;
+  editingZakazkaId = id;
+  zKulatinyIds = [];
+  document.getElementById('zakazkaModalTitle').textContent = '// Upravit zakázku';
+  document.getElementById('zJmeno').value = z.jmeno;
+  document.getElementById('zDatum').value = z.datum;
+  document.getElementById('zStav').value = z.stav;
+  document.getElementById('zSazba').value = z.sazba || '';
+  document.getElementById('zPoznamka').value = z.poznamka || '';
+  document.getElementById('zKulatinyList').innerHTML = '';
+  for (const k of z.kulatiny) {
+    const kid = Date.now() + Math.random();
+    zKulatinyIds.push(kid);
+    const container = document.getElementById('zKulatinyList');
+    const row = document.createElement('div');
+    row.className = 'z-kulatina-row';
+    row.id = 'zkrow_' + kid;
+    row.innerHTML = `
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:var(--muted);margin-bottom:8px;">KULATINA</div>
+      <div class="zkr-inputs">
+        <div class="input-group" style="margin:0;"><label>⌀ začátek <span class="unit-badge">cm</span></label><input type="number" id="zkds_${kid}" value="${k.ds}" min="5" max="120" step="1" oninput="updateZSouhrn()"></div>
+        <div class="input-group" style="margin:0;"><label>⌀ střed <span class="unit-badge">cm</span></label><input type="number" id="zkdm_${kid}" value="${k.dm||''}" min="5" max="120" step="1" oninput="updateZSouhrn()"></div>
+        <div class="input-group" style="margin:0;"><label>⌀ konec <span class="unit-badge">cm</span></label><input type="number" id="zkde_${kid}" value="${k.de}" min="5" max="120" step="1" oninput="updateZSouhrn()"></div>
+        <div class="input-group" style="margin:0;"><label>Délka <span class="unit-badge">cm</span></label><input type="number" id="zkdl_${kid}" value="${k.dl}" min="50" max="2000" step="10" oninput="updateZSouhrn()"></div>
+        <button class="btn-remove" style="margin-bottom:0;" onclick="removeZKulatina(${kid})">✕</button>
+      </div>`;
+    container.appendChild(row);
+  }
+  updateZSouhrn();
+  document.getElementById('zakazkaModal').style.display = 'block';
+  document.getElementById('zakazkaModal').scrollIntoView({ behavior: 'smooth' });
+}
+
+function deleteZakazka(id) {
+  if (!confirm('Opravdu smazat tuto zakázku?')) return;
+  const zakazky = getZakazky().filter(z => z.id !== id);
+  saveZakazkyToStorage(zakazky);
+  renderZakazky();
+}
+
+function changeStav(id, stav) {
+  const zakazky = getZakazky();
+  const z = zakazky.find(x => x.id === id);
+  if (z) { z.stav = stav; saveZakazkyToStorage(zakazky); renderZakazky(); }
+}
+
+function renderZakazky() {
+  const zakazky = getZakazky();
+  updateZakazkyCount();
+  const list = document.getElementById('zakazkyList');
+  if (!list) return;
+
+  if (zakazky.length === 0) {
+    list.innerHTML = '<div class="zakazky-empty"><div class="big">📦</div>ŽÁDNÉ ZAKÁZKY<br><br>Klikněte na + Nová zakázka</div>';
+    return;
+  }
+
+  const stavLabel = { otevrena: '🟡 Otevřená', hotova: '🟢 Hotová', zaplacena: '✅ Zaplacená' };
+  const stavClass = { otevrena: 'stav-otevrena', hotova: 'stav-hotova', zaplacena: 'stav-zaplacena' };
+
+  list.innerHTML = zakazky.map(z => {
+    const kulatinyTags = z.kulatiny.map((k,i) =>
+      `<span class="zk-kulatina-tag">⌀${Math.min(k.ds,k.dm||k.ds,k.de)}cm × ${k.dl}cm</span>`
+    ).join('');
+
+    return `
+    <div class="zakazka-card">
+      <div class="zk-header">
+        <div class="zk-name">${z.jmeno}</div>
+        <span class="zk-stav ${stavClass[z.stav]}">${stavLabel[z.stav]}</span>
+      </div>
+      <div class="zk-meta">
+        📅 ${z.datum || '—'}
+        ${z.poznamka ? ' &nbsp;·&nbsp; 📝 ' + z.poznamka : ''}
+      </div>
+      <div class="zk-kulatiny">${kulatinyTags}</div>
+      <div class="zk-footer">
+        <div>
+          <div class="zk-cena">${z.totalCena ? z.totalCena.toLocaleString('cs-CZ') + ' Kč' : '— Kč'}</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:var(--muted);">${z.totalM3.toFixed(3)} m³ · ${z.kulatiny.length} ks kulatiny</div>
+        </div>
+        <div class="zk-actions">
+          <select class="zk-btn" onchange="changeStav(${z.id}, this.value)" style="padding:5px 8px;">
+            <option value="otevrena" ${z.stav==='otevrena'?'selected':''}>🟡 Otevřená</option>
+            <option value="hotova" ${z.stav==='hotova'?'selected':''}>🟢 Hotová</option>
+            <option value="zaplacena" ${z.stav==='zaplacena'?'selected':''}>✅ Zaplacená</option>
+          </select>
+          <button class="zk-btn" onclick="editZakazka(${z.id})">✏️ Upravit</button>
+          <button class="zk-btn delete" onclick="deleteZakazka(${z.id})">🗑</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// Init
+updateZakazkyCount();
 renderHistory();
 </script>
+
+<!-- FIREBASE SDK -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
+  from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
+import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, query, orderBy }
+  from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAr7IVOBxjQ6HZNj-sUS2KnV_qZMBhEezA",
+  authDomain: "pila-12.firebaseapp.com",
+  projectId: "pila-12",
+  storageBucket: "pila-12.firebasestorage.app",
+  messagingSenderId: "17074797711",
+  appId: "1:17074797711:web:aa1877f5e9ff25247084fa"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+let currentUser = null;
+let unsubZakazky = null;
+let unsubHistorie = null;
+
+// ── AUTH ──────────────────────────────────────────────────────────────────────
+window.loginGoogle = async function() {
+  try {
+    const provider = new GoogleAuthProvider();
+    await signInWithPopup(auth, provider);
+  } catch(e) {
+    alert('Přihlášení se nezdařilo: ' + e.message);
+  }
+};
+
+window.logoutUser = async function() {
+  await signOut(auth);
+};
+
+onAuthStateChanged(auth, user => {
+  currentUser = user;
+  const bar = document.getElementById('authBar');
+  if (user) {
+    bar.innerHTML = `
+      <span class="auth-user">👤 <strong>${user.displayName?.split(' ')[0] || user.email}</strong></span>
+      <span class="sync-badge sync-ok">☁ Synced</span>
+      <button class="btn-logout" onclick="logoutUser()">Odhlásit</button>
+    `;
+    subscribeFirestore(user.uid);
+  } else {
+    bar.innerHTML = `<button class="btn-login" onclick="loginGoogle()">🔑 Přihlásit přes Google</button>`;
+    if (unsubZakazky) { unsubZakazky(); unsubZakazky = null; }
+    if (unsubHistorie) { unsubHistorie(); unsubHistorie = null; }
+  }
+});
+
+// ── FIRESTORE SYNC ────────────────────────────────────────────────────────────
+function subscribeFirestore(uid) {
+  // Zakázky — sdílené (všichni vidí stejné)
+  const zakazkyRef = collection(db, 'zakazky');
+  unsubZakazky = onSnapshot(query(zakazkyRef, orderBy('created', 'desc')), snap => {
+    const data = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+    // Převeď string ID zpět na number pro kompatibilitu
+    const normalized = data.map(z => ({ ...z, id: Number(z.id) || z.id }));
+    localStorage.setItem('pilaZakazky', JSON.stringify(normalized));
+    renderZakazky();
+    updateZakazkyCount();
+  });
+
+  // Historie — osobní (každý má svojí)
+  const historieRef = collection(db, `users/${uid}/historie`);
+  unsubHistorie = onSnapshot(query(historieRef, orderBy('id', 'desc')), snap => {
+    const data = snap.docs.map(d => d.data());
+    localStorage.setItem('pilaHistory', JSON.stringify(data));
+    renderHistory();
+  });
+}
+
+// ── OVERRIDE SAVE/DELETE PRO FIRESTORE ───────────────────────────────────────
+const _origSaveZakazky = window.saveZakazkyToStorage;
+window.saveZakazkyToStorage = function(data) {
+  // Ulož lokálně
+  localStorage.setItem('pilaZakazky', JSON.stringify(data));
+  updateZakazkyCount();
+  // Sync do Firestore pokud přihlášen
+  if (!currentUser) return;
+  // Sync všechny záznamy
+  data.forEach(async z => {
+    try {
+      await setDoc(doc(db, 'zakazky', String(z.id)), { ...z, id: String(z.id) });
+    } catch(e) { console.error('Sync error:', e); }
+  });
+};
+
+// Override deleteZakazka pro Firestore
+const _origDeleteZakazka = window.deleteZakazka;
+window.deleteZakazka = async function(id) {
+  if (!confirm('Opravdu smazat tuto zakázku?')) return;
+  const zakazky = getZakazky().filter(z => z.id !== id);
+  saveZakazkyToStorage(zakazky);
+  renderZakazky();
+  if (currentUser) {
+    try { await deleteDoc(doc(db, 'zakazky', String(id))); } catch(e) {}
+  }
+};
+
+// Override saveToHistory pro Firestore
+const _origSaveToHistory = window.saveToHistory;
+window.saveToHistory = function() {
+  if (!currentResult) { alert('Nejprve spusťte výpočet.'); return; }
+  const history = getHistory();
+  const entry = { id: Date.now(), date: new Date().toLocaleString('cs-CZ'), ...currentResult };
+  history.unshift(entry);
+  if (history.length > 20) history.pop();
+  localStorage.setItem('pilaHistory', JSON.stringify(history));
+  renderHistory();
+
+  // Sync do Firestore
+  if (currentUser) {
+    setDoc(doc(db, `users/${currentUser.uid}/historie`, String(entry.id)), entry)
+      .catch(e => console.error('Historie sync error:', e));
+  }
+
+  const btn = document.querySelector('.btn-save-history');
+  btn.textContent = '✅ Uloženo!';
+  btn.style.borderColor = 'var(--green)';
+  btn.style.color = 'var(--green)';
+  setTimeout(() => {
+    btn.textContent = '💾 Uložit do historie';
+    btn.style.borderColor = '';
+    btn.style.color = '';
+  }, 2000);
+};
+</script>
+
 </body>
 </html>
