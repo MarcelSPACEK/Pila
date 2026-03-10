@@ -1257,22 +1257,27 @@
       <div class="sort-card active" data-type="tram" onclick="toggleSort(this)">
         <div class="check">✓</div>
         <div class="sort-name">Trám</div>
-        <div class="sort-dim">8×8, 10×10, 12×12, 15×15 cm</div>
-      </div>
-      <div class="sort-card active" data-type="prkno" onclick="toggleSort(this)">
-        <div class="check">✓</div>
-        <div class="sort-name">Prkno</div>
-        <div class="sort-dim">tl. 2–3 cm, š. dle průměru</div>
-      </div>
-      <div class="sort-card active" data-type="fosnka" onclick="toggleSort(this)">
-        <div class="check">✓</div>
-        <div class="sort-name">Fošna</div>
-        <div class="sort-dim">tl. 4–6 cm, š. dle průměru</div>
+        <div class="sort-dim">12×12, 14×14, 16×16, 18×18, 20×20 cm</div>
       </div>
       <div class="sort-card active" data-type="hranol" onclick="toggleSort(this)">
         <div class="check">✓</div>
         <div class="sort-name">Hranol</div>
-        <div class="sort-dim">8×6, 10×6, 10×8, 12×8, 12×10, 15×10 cm</div>
+        <div class="sort-dim">6×8, 8×8, 8×10, 10×10, 10×12, 12×12 cm</div>
+      </div>
+      <div class="sort-card active" data-type="fosnka" onclick="toggleSort(this)">
+        <div class="check">✓</div>
+        <div class="sort-name">Fošna</div>
+        <div class="sort-dim">tl. 40/50/60/80 mm, š. dle průměru</div>
+      </div>
+      <div class="sort-card active" data-type="prkno" onclick="toggleSort(this)">
+        <div class="check">✓</div>
+        <div class="sort-name">Prkno</div>
+        <div class="sort-dim">tl. 20/25/30 mm, š. dle průměru</div>
+      </div>
+      <div class="sort-card" data-type="lat" onclick="toggleSort(this)">
+        <div class="check">✓</div>
+        <div class="sort-name">Lať</div>
+        <div class="sort-dim">3×5, 4×6, 5×5 cm</div>
       </div>
     </div>
 
@@ -1281,9 +1286,10 @@
       <select id="priority">
         <option value="auto">Automaticky (max. výtěžnost)</option>
         <option value="tram">Preferovat trámy</option>
-        <option value="prkno">Preferovat prkna</option>
         <option value="hranol">Preferovat hranoly</option>
         <option value="fosnka">Preferovat fošny</option>
+        <option value="prkno">Preferovat prkna</option>
+        <option value="lat">Preferovat latě</option>
       </select>
     </div>
 
@@ -1341,11 +1347,13 @@
     <div style="margin-bottom:12px;">
       <label style="font-size:0.8rem;color:var(--muted);font-family:'IBM Plex Mono',monospace;letter-spacing:1px;display:block;margin-bottom:8px;">Preferovaná tloušťka prken/fošen</label>
       <div style="display:flex;gap:6px;flex-wrap:wrap;" id="thicknessSelector">
-        <button class="thick-btn" data-t="2" onclick="selectThickness(this)">2 cm</button>
-        <button class="thick-btn" data-t="3" onclick="selectThickness(this)">3 cm</button>
-        <button class="thick-btn active" data-t="4" onclick="selectThickness(this)">4 cm</button>
-        <button class="thick-btn" data-t="5" onclick="selectThickness(this)">5 cm</button>
-        <button class="thick-btn" data-t="6" onclick="selectThickness(this)">6 cm</button>
+        <button class="thick-btn" data-t="2" onclick="selectThickness(this)">20 mm</button>
+        <button class="thick-btn" data-t="2.5" onclick="selectThickness(this)">25 mm</button>
+        <button class="thick-btn" data-t="3" onclick="selectThickness(this)">30 mm</button>
+        <button class="thick-btn" data-t="4" onclick="selectThickness(this)">40 mm</button>
+        <button class="thick-btn active" data-t="5" onclick="selectThickness(this)">50 mm</button>
+        <button class="thick-btn" data-t="6" onclick="selectThickness(this)">60 mm</button>
+        <button class="thick-btn" data-t="8" onclick="selectThickness(this)">80 mm</button>
         <button class="thick-btn" data-t="0" onclick="selectThickness(this)">Auto</button>
       </div>
     </div>
@@ -1664,12 +1672,12 @@ function maxWidthAtY(y, h, r) {
 }
 
 // ─── NEW FULL-CIRCLE SLICE OPTIMIZER ─────────────────────────────────────────
-let selectedThickness = 4;
+let selectedThickness = 5;
 
 function selectThickness(btn) {
   document.querySelectorAll('.thick-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  selectedThickness = parseInt(btn.dataset.t);
+  selectedThickness = parseFloat(btn.dataset.t);
 }
 
 function maxWidthAtY(centerY, h, r) {
@@ -1681,40 +1689,63 @@ function maxWidthAtY(centerY, h, r) {
 }
 
 function findBestPlan(rEff, kerfCm, priority) {
+  // Všechny dostupné tloušťky v cm
+  const ALL_THICKS = [8, 6, 5, 4, 3, 2.5, 2];
   const thickOptions = selectedThickness === 0
-    ? [4, 3, 5, 2, 6]
-    : [selectedThickness, ...([6,5,4,3,2].filter(t => t !== selectedThickness))];
+    ? ALL_THICKS
+    : [selectedThickness, ...ALL_THICKS.filter(t => t !== selectedThickness)];
+
+  // Tloušťky prken (≤ 3.5 cm) a fošen (> 3.5 cm)
+  const fosnkaThicks = thickOptions.filter(t => t > 3.5);   // 8,6,5,4
+  const prknoThicks  = thickOptions.filter(t => t <= 3.5);  // 3,2.5,2
 
   const hasTram   = activeTypes.has('tram');
   const hasHranol = activeTypes.has('hranol');
   const hasFosnka = activeTypes.has('fosnka');
   const hasPrkno  = activeTypes.has('prkno');
+  const hasLat    = activeTypes.has('lat');
   const wantsBeam  = hasTram || hasHranol;
-  const wantsBoard = hasFosnka || hasPrkno;
+  const wantsBoard = hasFosnka || hasPrkno || hasLat;
 
-  // Fill a vertical range with boards (prkna/fošny)
+  // Rozměry sortimentů
+  const TRAM_SIZES   = [20, 18, 16, 14, 12, 10, 8];
+  const HRANOL_SIZES = [
+    {w:12,h:12},{w:12,h:10},{w:10,h:12},{w:10,h:10},
+    {w:10,h:8},{w:8,h:10},{w:8,h:8},{w:8,h:6},{w:6,h:8},{w:6,h:6}
+  ];
+  const LAT_SIZES = [{w:6,h:4},{w:5,h:5},{w:4,h:6},{w:3,h:5},{w:5,h:3}];
+
+  // Fill a vertical range with boards (prkna/fošny/latě)
   function fillBoards(topEdge, bottomLimit, pieces, areaRef) {
     let te = topEdge;
     let noFit = 0;
     while (noFit < 60) {
       let best = null;
       if (hasFosnka) {
-        for (const t of [6,5,4]) {
+        for (const t of fosnkaThicks) {
           const bot = te - t;
           if (bot < bottomLimit - 0.05) continue;
           const cy = (te+bot)/2;
           const w = maxWidthAtY(cy, t, rEff);
-          if (w >= 2) { const a=w*t; if(!best||a>best.area) best={w,h:t,bot,cy,area:a,type:'fosnka',name:`Fošna ${w}×${t}`}; break; }
+          if (w >= 2) { const a=w*t; if(!best||a>best.area) best={w,h:t,bot,cy,area:a,type:'fosnka',name:`Fošna ${w}×${t} cm`}; break; }
         }
       }
       if (hasPrkno) {
-        const pts = thickOptions.filter(t=>t<=3).length ? thickOptions.filter(t=>t<=3) : [3,2];
-        for (const t of pts) {
+        for (const t of prknoThicks) {
           const bot = te - t;
           if (bot < bottomLimit - 0.05) continue;
           const cy = (te+bot)/2;
           const w = maxWidthAtY(cy, t, rEff);
-          if (w >= 2) { const a=w*t; if(!best||a>best.area) best={w,h:t,bot,cy,area:a,type:'prkno',name:`Prkno ${w}×${t}`}; break; }
+          if (w >= 2) { const a=w*t; if(!best||a>best.area) best={w,h:t,bot,cy,area:a,type:'prkno',name:`Prkno ${w}×${t} cm`}; break; }
+        }
+      }
+      if (hasLat) {
+        for (const ls of LAT_SIZES) {
+          const bot = te - ls.h;
+          if (bot < bottomLimit - 0.05) continue;
+          const cy = (te+bot)/2;
+          const w = maxWidthAtY(cy, ls.h, rEff);
+          if (w >= ls.w) { const a=ls.w*ls.h; if(!best||a>best.area) best={w:ls.w,h:ls.h,bot,cy,area:a,type:'lat',name:`Lať ${ls.w}×${ls.h} cm`}; break; }
         }
       }
       if (best) {
@@ -1734,17 +1765,17 @@ function findBestPlan(rEff, kerfCm, priority) {
     while (noFit < 60) {
       let best = null;
       if (hasTram) {
-        for (const s of [15,12,10,8]) {
+        for (const s of TRAM_SIZES) {
           const bot=te-s; if(bot<bottomLimit-0.05) continue;
           const cy=(te+bot)/2; const w=maxWidthAtY(cy,s,rEff);
-          if(w>=s){const a=s*s; if(!best||a>best.area) best={w:s,h:s,bot,cy,area:a,type:'tram',name:`Trám ${s}×${s}`}; break;}
+          if(w>=s){const a=s*s; if(!best||a>best.area) best={w:s,h:s,bot,cy,area:a,type:'tram',name:`Trám ${s}×${s} cm`}; break;}
         }
       }
       if (hasHranol) {
-        for (const hs of [{w:15,h:10},{w:12,h:10},{w:12,h:8},{w:10,h:8},{w:10,h:6},{w:8,h:6}]) {
+        for (const hs of HRANOL_SIZES) {
           const bot=te-hs.h; if(bot<bottomLimit-0.05) continue;
           const cy=(te+bot)/2; const w=maxWidthAtY(cy,hs.h,rEff);
-          if(w>=hs.w){const a=hs.w*hs.h; if(!best||a>best.area) best={w:hs.w,h:hs.h,bot,cy,area:a,type:'hranol',name:`Hranol ${hs.w}×${hs.h}`}; break;}
+          if(w>=hs.w){const a=hs.w*hs.h; if(!best||a>best.area) best={w:hs.w,h:hs.h,bot,cy,area:a,type:'hranol',name:`Hranol ${hs.w}×${hs.h} cm`}; break;}
         }
       }
       if (best) {
@@ -1776,17 +1807,16 @@ function findBestPlan(rEff, kerfCm, priority) {
   let globalBest = null;
 
   for (let te = rEff - 0.01; te > -rEff + 2; te -= 0.5) {
-    // Try each beam size at this position
     const candidates = [];
-    if (hasTram) for (const s of [15,12,10,8]) {
+    if (hasTram) for (const s of TRAM_SIZES) {
       const bot=te-s; if(bot<-rEff) continue;
       const cy=(te+bot)/2; const w=maxWidthAtY(cy,s,rEff);
-      if(w>=s) candidates.push({w:s,h:s,bot,cy,topEdge:te,type:'tram',name:`Trám ${s}×${s}`,beamArea:s*s});
+      if(w>=s) candidates.push({w:s,h:s,bot,cy,topEdge:te,type:'tram',name:`Trám ${s}×${s} cm`,beamArea:s*s});
     }
-    if (hasHranol) for (const hs of [{w:15,h:10},{w:12,h:10},{w:12,h:8},{w:10,h:8},{w:10,h:6},{w:8,h:6}]) {
+    if (hasHranol) for (const hs of HRANOL_SIZES) {
       const bot=te-hs.h; if(bot<-rEff) continue;
       const cy=(te+bot)/2; const w=maxWidthAtY(cy,hs.h,rEff);
-      if(w>=hs.w) candidates.push({w:hs.w,h:hs.h,bot,cy,topEdge:te,type:'hranol',name:`Hranol ${hs.w}×${hs.h}`,beamArea:hs.w*hs.h});
+      if(w>=hs.w) candidates.push({w:hs.w,h:hs.h,bot,cy,topEdge:te,type:'hranol',name:`Hranol ${hs.w}×${hs.h} cm`,beamArea:hs.w*hs.h});
     }
 
     for (const beam of candidates) {
@@ -1856,8 +1886,8 @@ function calculate() {
   const scale = (SVG_SIZE * 0.42) / rEff;
   const cx = SVG_SIZE / 2, cy = SVG_SIZE / 2;
 
-  const pieceColors = { tram: '#8B5E3C', hranol: '#7a6040', fosnka: '#a07040', prkno: '#c49060', custom: '#909080' };
-  const pieceStroke = { tram: '#c4936a', hranol: '#b08050', fosnka: '#d0a070', prkno: '#e0b080', custom: '#b0b090' };
+  const pieceColors = { tram: '#8B5E3C', hranol: '#7a6040', fosnka: '#a07040', prkno: '#c49060', lat: '#6a8060', custom: '#909080' };
+  const pieceStroke = { tram: '#c4936a', hranol: '#b08050', fosnka: '#d0a070', prkno: '#e0b080', lat: '#90b080', custom: '#b0b090' };
 
   let svgPieces = '';
   for (const piece of plan.pieces) {
@@ -1917,7 +1947,7 @@ function calculate() {
 
   let gridHTML = '';
   for (const item of Object.values(counts)) {
-    const typeName = { tram: 'TRÁM', hranol: 'HRANOL', prkno: 'PRKNO', fosnka: 'FOŠNA', custom: 'VLASTNÍ' }[item.type] || 'KUS';
+    const typeName = { tram: 'TRÁM', hranol: 'HRANOL', prkno: 'PRKNO', fosnka: 'FOŠNA', lat: 'LAŤ', custom: 'VLASTNÍ' }[item.type] || 'KUS';
     const lengthM = (length / 100).toFixed(2);
     gridHTML += `
       <div class="output-item">
@@ -2028,7 +2058,7 @@ function calcOffcuts(plan, rEff, length) {
 
   section.style.display = 'block';
   const lengthM = (length / 100).toFixed(2);
-  const typeName = { fosnka: 'FOŠNA', prkno: 'PRKNO' };
+  const typeName = { fosnka: 'FOŠNA', prkno: 'PRKNO', lat: 'LAŤ' };
 
   if (Object.keys(grouped).length === 0) {
     grid.innerHTML = '<div style="color:var(--muted);font-family:IBM Plex Mono,monospace;font-size:0.75rem;padding:8px;">Žádné využitelné boční odřezky.</div>';
