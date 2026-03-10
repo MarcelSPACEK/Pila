@@ -1393,7 +1393,8 @@
       <div id="offcutsSection" style="display:none;">
         <div class="divider"></div>
         <div class="section-label">// Z bočních klínů lze ještě vyřezat 🪵</div>
-        <div class="note-box" style="margin-bottom:10px;font-size:0.75rem;">Boční klíny vznikají po odřezání stran — lze z nich ještě vyřezat užší prkna nebo lišty.</div>
+        <div class="note-box" style="margin-bottom:10px;font-size:0.75rem;">Boční klíny (oranžově) vznikají po odřezání stran — lze z nich ještě vyřezat užší prkna nebo lišty.</div>
+        <div id="offcutsSvg" style="margin-bottom:12px;"></div>
         <div class="output-grid" id="offcutsGrid"></div>
       </div>
 
@@ -1684,74 +1685,122 @@ function findBestPlan(rEff, kerfCm, priority) {
     ? [4, 3, 5, 2, 6]
     : [selectedThickness, ...([6,5,4,3,2].filter(t => t !== selectedThickness))];
 
-  // Build full candidate list for each row
-  function getBestAt(topEdge) {
-    let best = null;
+  const hasTram   = activeTypes.has('tram');
+  const hasHranol = activeTypes.has('hranol');
+  const hasFosnka = activeTypes.has('fosnka');
+  const hasPrkno  = activeTypes.has('prkno');
+  const wantsBeam  = hasTram || hasHranol;
+  const wantsBoard = hasFosnka || hasPrkno;
 
-    // Helper - check one piece
-    function tryPiece(w, h, type, name) {
-      const bot = topEdge - h;
-      if (bot < -rEff) return;
-      const cy = (topEdge + bot) / 2;
-      const avail = maxWidthAtY(cy, h, rEff);
-      if (avail < w) return;
-      const area = w * h;
-      if (!best || area > best.area) {
-        best = { w, h, type, name, bot, area, cy };
+  // Fill a vertical range with boards (prkna/fošny)
+  function fillBoards(topEdge, bottomLimit, pieces, areaRef) {
+    let te = topEdge;
+    let noFit = 0;
+    while (noFit < 60) {
+      let best = null;
+      if (hasFosnka) {
+        for (const t of [6,5,4]) {
+          const bot = te - t;
+          if (bot < bottomLimit - 0.05) continue;
+          const cy = (te+bot)/2;
+          const w = maxWidthAtY(cy, t, rEff);
+          if (w >= 2) { const a=w*t; if(!best||a>best.area) best={w,h:t,bot,cy,area:a,type:'fosnka',name:`Fošna ${w}×${t}`}; break; }
+        }
       }
-    }
-
-    if (activeTypes.has('tram')) {
-      for (const s of [15, 12, 10, 8]) tryPiece(s, s, 'tram', `Trám ${s}×${s}`);
-    }
-    if (activeTypes.has('hranol')) {
-      for (const hs of [{w:15,h:10},{w:12,h:10},{w:12,h:8},{w:10,h:8},{w:10,h:6},{w:8,h:6}]) {
-        tryPiece(hs.w, hs.h, 'hranol', `Hranol ${hs.w}×${hs.h}`);
+      if (hasPrkno) {
+        const pts = thickOptions.filter(t=>t<=3).length ? thickOptions.filter(t=>t<=3) : [3,2];
+        for (const t of pts) {
+          const bot = te - t;
+          if (bot < bottomLimit - 0.05) continue;
+          const cy = (te+bot)/2;
+          const w = maxWidthAtY(cy, t, rEff);
+          if (w >= 2) { const a=w*t; if(!best||a>best.area) best={w,h:t,bot,cy,area:a,type:'prkno',name:`Prkno ${w}×${t}`}; break; }
+        }
       }
+      if (best) {
+        pieces.push({w:best.w,h:best.h,x:0,y:best.cy,name:best.name,type:best.type,label:best.cy>=0?'nahoře':'dole'});
+        areaRef.v += best.area;
+        te = best.bot - kerfCm;
+        noFit = 0;
+      } else { te -= 0.1; noFit++; }
+      if (te < bottomLimit + 0.4) break;
     }
-    if (activeTypes.has('fosnka')) {
-      for (const t of [6, 5, 4]) {
-        const bot = topEdge - t;
-        if (bot < -rEff) continue;
-        const cy = (topEdge + bot) / 2;
-        const w = maxWidthAtY(cy, t, rEff);
-        if (w >= 2) { tryPiece(w, t, 'fosnka', `Fošna ${w}×${t}`); break; }
-      }
-    }
-    if (activeTypes.has('prkno')) {
-      for (const t of thickOptions.filter(t => t <= 3).concat([3, 2])) {
-        const bot = topEdge - t;
-        if (bot < -rEff) continue;
-        const cy = (topEdge + bot) / 2;
-        const w = maxWidthAtY(cy, t, rEff);
-        if (w >= 2) { tryPiece(w, t, 'prkno', `Prkno ${w}×${t}`); break; }
-      }
-    }
-    return best;
   }
 
-  // Main loop — try each position, skip 1mm if nothing fits
-  let topEdge = rEff - 0.01;
-  const pieces = [];
-  let totalArea = 0;
-  let noFitMm = 0;
-
-  while (noFitMm < 150) {
-    const p = getBestAt(topEdge);
-    if (p) {
-      pieces.push({ w: p.w, h: p.h, x: 0, y: p.cy, name: p.name, type: p.type, label: p.cy >= 0 ? 'nahoře' : 'dole' });
-      totalArea += p.area;
-      topEdge = p.bot - kerfCm;
-      noFitMm = 0;
-    } else {
-      topEdge -= 0.1;
-      noFitMm++;
+  // Fill a vertical range with beams (trámy/hranoly)
+  function fillBeams(topEdge, bottomLimit, pieces, areaRef) {
+    let te = topEdge;
+    let noFit = 0;
+    while (noFit < 60) {
+      let best = null;
+      if (hasTram) {
+        for (const s of [15,12,10,8]) {
+          const bot=te-s; if(bot<bottomLimit-0.05) continue;
+          const cy=(te+bot)/2; const w=maxWidthAtY(cy,s,rEff);
+          if(w>=s){const a=s*s; if(!best||a>best.area) best={w:s,h:s,bot,cy,area:a,type:'tram',name:`Trám ${s}×${s}`}; break;}
+        }
+      }
+      if (hasHranol) {
+        for (const hs of [{w:15,h:10},{w:12,h:10},{w:12,h:8},{w:10,h:8},{w:10,h:6},{w:8,h:6}]) {
+          const bot=te-hs.h; if(bot<bottomLimit-0.05) continue;
+          const cy=(te+bot)/2; const w=maxWidthAtY(cy,hs.h,rEff);
+          if(w>=hs.w){const a=hs.w*hs.h; if(!best||a>best.area) best={w:hs.w,h:hs.h,bot,cy,area:a,type:'hranol',name:`Hranol ${hs.w}×${hs.h}`}; break;}
+        }
+      }
+      if (best) {
+        pieces.push({w:best.w,h:best.h,x:0,y:best.cy,name:best.name,type:best.type,label:best.cy>=0?'nahoře':'dole'});
+        areaRef.v += best.area;
+        te = best.bot - kerfCm;
+        noFit = 0;
+      } else { te -= 0.1; noFit++; }
+      if (te < bottomLimit + 0.4) break;
     }
-    if (topEdge < -rEff + 0.5) break;
   }
 
-  if (pieces.length === 0) return null;
-  return { pieces, totalArea };
+  // ── ONLY BOARDS ─────────────────────────────────────────────────────────────
+  if (!wantsBeam) {
+    const pieces=[]; const areaRef={v:0};
+    fillBoards(rEff-0.01, -rEff+0.5, pieces, areaRef);
+    return pieces.length ? {pieces, totalArea:areaRef.v} : null;
+  }
+
+  // ── ONLY BEAMS ──────────────────────────────────────────────────────────────
+  if (!wantsBoard) {
+    const pieces=[]; const areaRef={v:0};
+    fillBeams(rEff-0.01, -rEff+0.5, pieces, areaRef);
+    return pieces.length ? {pieces, totalArea:areaRef.v} : null;
+  }
+
+  // ── BEAMS + BOARDS: find optimal beam position ───────────────────────────────
+  // Try every 0.5cm step, find beam position that maximizes TOTAL area (beam + boards above + boards below)
+  let globalBest = null;
+
+  for (let te = rEff - 0.01; te > -rEff + 2; te -= 0.5) {
+    // Try each beam size at this position
+    const candidates = [];
+    if (hasTram) for (const s of [15,12,10,8]) {
+      const bot=te-s; if(bot<-rEff) continue;
+      const cy=(te+bot)/2; const w=maxWidthAtY(cy,s,rEff);
+      if(w>=s) candidates.push({w:s,h:s,bot,cy,topEdge:te,type:'tram',name:`Trám ${s}×${s}`,beamArea:s*s});
+    }
+    if (hasHranol) for (const hs of [{w:15,h:10},{w:12,h:10},{w:12,h:8},{w:10,h:8},{w:10,h:6},{w:8,h:6}]) {
+      const bot=te-hs.h; if(bot<-rEff) continue;
+      const cy=(te+bot)/2; const w=maxWidthAtY(cy,hs.h,rEff);
+      if(w>=hs.w) candidates.push({w:hs.w,h:hs.h,bot,cy,topEdge:te,type:'hranol',name:`Hranol ${hs.w}×${hs.h}`,beamArea:hs.w*hs.h});
+    }
+
+    for (const beam of candidates) {
+      const pcs=[]; const ar={v:0};
+      pcs.push({w:beam.w,h:beam.h,x:0,y:beam.cy,name:beam.name,type:beam.type,label:beam.cy>=0?'nahoře':'dole'});
+      ar.v = beam.beamArea;
+      fillBoards(beam.topEdge - kerfCm > rEff-0.5 ? rEff-0.01 : beam.topEdge, beam.topEdge - kerfCm, pcs, ar);
+      fillBoards(beam.bot - kerfCm, -rEff+0.5, pcs, ar);
+      if (!globalBest || ar.v > globalBest.totalArea)
+        globalBest = {pieces:[...pcs], totalArea:ar.v};
+    }
+  }
+
+  return globalBest && globalBest.pieces.length ? globalBest : null;
 }
 
 // ─── MAIN CALCULATE ──────────────────────────────────────────────────────────
@@ -1774,6 +1823,15 @@ function calculate() {
   const rEff = rRaw - BARK;
 
   const circleArea = Math.PI * rEff * rEff;
+
+  // Reset boční klíny
+  document.getElementById('offcutsSection').style.display = 'none';
+  document.getElementById('offcutsGrid').innerHTML = '';
+  document.getElementById('offcutsSvg').innerHTML = '';
+
+  document.getElementById('offcutsSection').style.display = 'none';
+  document.getElementById('offcutsGrid').innerHTML = '';
+  document.getElementById('offcutsSvg').innerHTML = '';
 
   const plan = findBestPlan(rEff, kerf / 10, priority);
 
@@ -1926,31 +1984,35 @@ function getCuts(pieces, cx, cy, scale) {
 }
 
 function calcOffcuts(plan, rEff, length) {
-  // For each piece, calculate remaining width on left and right side
-  // Side space at a given piece: available width at that Y - piece width
   const offcuts = [];
 
   for (const p of plan.pieces) {
+    // Use the widest point of this piece (center y) to check side space
     const availW = maxWidthAtY(p.y, p.h, rEff);
-    const sideSpace = (availW - p.w) / 2; // space on each side in cm
+    const sideSpace = Math.floor((availW - p.w) / 2); // whole cm, each side
 
-    if (sideSpace < 2) continue; // not worth it
+    if (sideSpace < 1) continue;
 
-    // What can we cut from this side strip?
-    // Strip is: sideSpace wide, p.h tall
-    // Find best prkno/lišta that fits
-    for (const t of [p.h, Math.min(p.h, 6), Math.min(p.h, 4), Math.min(p.h, 3), Math.min(p.h, 2)]) {
-      const w = Math.floor(sideSpace); // whole cm
-      if (w >= 2 && t >= 2) {
+    // What fits in strip: sideSpace wide, p.h tall
+    // Try thicknesses from largest to smallest
+    const stripH = p.h;
+    const stripW = sideSpace;
+
+    // Try to get the best prkno/fošna from this strip
+    let placed = false;
+    for (const t of [stripH, 6, 5, 4, 3, 2]) {
+      if (t > stripH) continue;
+      if (stripW >= 2 && t >= 2) {
         const type = t >= 4 ? 'fosnka' : 'prkno';
-        const name = (t >= 4 ? 'Fošna' : 'Prkno') + ` ${w}×${t}`;
-        offcuts.push({ w, h: t, name, type, count: 2 }); // 2× (left + right)
+        const label = t >= 4 ? 'Fošna' : 'Prkno';
+        offcuts.push({ w: stripW, h: t, name: `${label} ${stripW}×${t}`, type, count: 2 });
+        placed = true;
         break;
       }
     }
   }
 
-  // Deduplicate and sum
+  // Group same dimensions
   const grouped = {};
   for (const o of offcuts) {
     const key = `${o.w}×${o.h}`;
@@ -1960,15 +2022,18 @@ function calcOffcuts(plan, rEff, length) {
 
   const section = document.getElementById('offcutsSection');
   const grid = document.getElementById('offcutsGrid');
+  if (!section || !grid) return;
 
-  if (Object.keys(grouped).length === 0) {
-    section.style.display = 'none';
-    return;
-  }
+  // Always show section after calculate
 
   section.style.display = 'block';
   const lengthM = (length / 100).toFixed(2);
   const typeName = { fosnka: 'FOŠNA', prkno: 'PRKNO' };
+
+  if (Object.keys(grouped).length === 0) {
+    grid.innerHTML = '<div style="color:var(--muted);font-family:IBM Plex Mono,monospace;font-size:0.75rem;padding:8px;">Žádné využitelné boční odřezky.</div>';
+    return;
+  }
 
   grid.innerHTML = Object.values(grouped).map(o => `
     <div class="output-item" style="border-color:#5a3a1e;opacity:0.85;">
@@ -1978,6 +2043,63 @@ function calcOffcuts(plan, rEff, length) {
       <div class="info-tag">dl. ${lengthM} m</div>
     </div>
   `).join('');
+
+  // SVG vizualizace bočních klínů
+  const svgSize = 220;
+  const scale = (svgSize * 0.42) / rEff;
+  const cx = svgSize / 2, cy = svgSize / 2;
+
+  let svgContent = '';
+
+  // Kruh - kůra
+  svgContent += `<circle cx="${cx}" cy="${cy}" r="${(rEff+1)*scale}" fill="#3d2810" stroke="#5a3a1a" stroke-width="1.5"/>`;
+  svgContent += `<circle cx="${cx}" cy="${cy}" r="${rEff*scale}" fill="#1a0f05" stroke="#6a4020" stroke-width="1" stroke-dasharray="3,2"/>`;
+
+  // Hlavní kusy (šedě/tmavě)
+  for (const p of plan.pieces) {
+    const px = cx - (p.w/2)*scale;
+    const py = cy - (p.y + p.h/2)*scale;
+    const pw = p.w*scale;
+    const ph = p.h*scale;
+    svgContent += `<rect x="${px}" y="${py}" width="${pw}" height="${ph}" fill="#4a3020" stroke="#6a4828" stroke-width="1" opacity="0.7"/>`;
+  }
+
+  // Boční klíny - zvýrazněné oranžově
+  for (const p of plan.pieces) {
+    const availW = maxWidthAtY(p.y, p.h, rEff);
+    const sideSpace = Math.floor((availW - p.w) / 2);
+    if (sideSpace < 1) continue;
+
+    const py = cy - (p.y + p.h/2)*scale;
+    const ph = p.h*scale;
+    const mainRight = cx + (p.w/2)*scale;
+    const mainLeft  = cx - (p.w/2)*scale;
+    const rightEdge = cx + (availW/2)*scale;
+    const leftEdge  = cx - (availW/2)*scale;
+
+    // Pravý klín
+    svgContent += `<rect x="${mainRight}" y="${py}" width="${rightEdge-mainRight}" height="${ph}" fill="#c4793a" stroke="#e8a050" stroke-width="1" opacity="0.85"/>`;
+    // Levý klín
+    svgContent += `<rect x="${leftEdge}" y="${py}" width="${mainLeft-leftEdge}" height="${ph}" fill="#c4793a" stroke="#e8a050" stroke-width="1" opacity="0.85"/>`;
+
+    // Rozměr popisek
+    const labelW = sideSpace.toFixed(0);
+    svgContent += `<text x="${(mainRight+rightEdge)/2}" y="${py+ph/2+4}" text-anchor="middle" fill="#fff" font-size="8" font-family="IBM Plex Mono,monospace">${labelW}cm</text>`;
+    svgContent += `<text x="${(leftEdge+mainLeft)/2}" y="${py+ph/2+4}" text-anchor="middle" fill="#fff" font-size="8" font-family="IBM Plex Mono,monospace">${labelW}cm</text>`;
+  }
+
+  // Legenda
+  svgContent += `
+    <rect x="4" y="${svgSize-22}" width="10" height="8" fill="#4a3020" stroke="#6a4828" stroke-width="1"/>
+    <text x="18" y="${svgSize-15}" fill="#7a7060" font-size="8" font-family="IBM Plex Mono,monospace">hlavní řez</text>
+    <rect x="80" y="${svgSize-22}" width="10" height="8" fill="#c4793a" stroke="#e8a050" stroke-width="1"/>
+    <text x="94" y="${svgSize-15}" fill="#c4936a" font-size="8" font-family="IBM Plex Mono,monospace">boční klín</text>
+  `;
+
+  document.getElementById('offcutsSvg').innerHTML = `
+    <svg width="${svgSize}" height="${svgSize}" viewBox="0 0 ${svgSize} ${svgSize}" style="background:#0f0e0c;border:1px solid #3a3528;">
+      ${svgContent}
+    </svg>`;
 }
 
 function buildSteps(plan, rEff, kerf, dStart, dMid, dEnd, length) {
