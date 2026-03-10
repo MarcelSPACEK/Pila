@@ -1389,6 +1389,14 @@
       <div class="section-label">// Co z toho nařežeme</div>
       <div class="output-grid" id="outputGrid"></div>
 
+      <!-- Side offcuts -->
+      <div id="offcutsSection" style="display:none;">
+        <div class="divider"></div>
+        <div class="section-label">// Z bočních klínů lze ještě vyřezat 🪵</div>
+        <div class="note-box" style="margin-bottom:10px;font-size:0.75rem;">Boční klíny vznikají po odřezání stran — lze z nich ještě vyřezat užší prkna nebo lišty.</div>
+        <div class="output-grid" id="offcutsGrid"></div>
+      </div>
+
       <!-- Waste bar -->
       <div class="waste-bar-container">
         <div class="waste-bar-label">
@@ -1864,6 +1872,9 @@ function calculate() {
   }
   document.getElementById('outputGrid').innerHTML = gridHTML;
 
+  // ── BOČNÍ KLÍNY — co lze ještě vyřezat ───────────────────────────────────
+  calcOffcuts(plan, rEff, length);
+
   // Waste bar
   document.getElementById('wasteText').textContent = `${efficiency}% dřevo  /  ${100 - efficiency}% odpad`;
   setTimeout(() => {
@@ -1912,6 +1923,61 @@ function getCuts(pieces, cx, cy, scale) {
     ys.add(Math.round(bot));
   }
   return [...ys];
+}
+
+function calcOffcuts(plan, rEff, length) {
+  // For each piece, calculate remaining width on left and right side
+  // Side space at a given piece: available width at that Y - piece width
+  const offcuts = [];
+
+  for (const p of plan.pieces) {
+    const availW = maxWidthAtY(p.y, p.h, rEff);
+    const sideSpace = (availW - p.w) / 2; // space on each side in cm
+
+    if (sideSpace < 2) continue; // not worth it
+
+    // What can we cut from this side strip?
+    // Strip is: sideSpace wide, p.h tall
+    // Find best prkno/lišta that fits
+    for (const t of [p.h, Math.min(p.h, 6), Math.min(p.h, 4), Math.min(p.h, 3), Math.min(p.h, 2)]) {
+      const w = Math.floor(sideSpace); // whole cm
+      if (w >= 2 && t >= 2) {
+        const type = t >= 4 ? 'fosnka' : 'prkno';
+        const name = (t >= 4 ? 'Fošna' : 'Prkno') + ` ${w}×${t}`;
+        offcuts.push({ w, h: t, name, type, count: 2 }); // 2× (left + right)
+        break;
+      }
+    }
+  }
+
+  // Deduplicate and sum
+  const grouped = {};
+  for (const o of offcuts) {
+    const key = `${o.w}×${o.h}`;
+    if (!grouped[key]) grouped[key] = { ...o, count: 0 };
+    grouped[key].count += o.count;
+  }
+
+  const section = document.getElementById('offcutsSection');
+  const grid = document.getElementById('offcutsGrid');
+
+  if (Object.keys(grouped).length === 0) {
+    section.style.display = 'none';
+    return;
+  }
+
+  section.style.display = 'block';
+  const lengthM = (length / 100).toFixed(2);
+  const typeName = { fosnka: 'FOŠNA', prkno: 'PRKNO' };
+
+  grid.innerHTML = Object.values(grouped).map(o => `
+    <div class="output-item" style="border-color:#5a3a1e;opacity:0.85;">
+      <div class="qty">${o.count}×</div>
+      <div class="type" style="color:#c4936a;">${typeName[o.type] || 'PRKNO'}</div>
+      <div class="dims">${o.w} × ${o.h} cm</div>
+      <div class="info-tag">dl. ${lengthM} m</div>
+    </div>
+  `).join('');
 }
 
 function buildSteps(plan, rEff, kerf, dStart, dMid, dEnd, length) {
