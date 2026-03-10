@@ -1134,6 +1134,20 @@
     letter-spacing: 1px;
   }
 
+  .thick-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 8px 14px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 1px;
+  }
+  .thick-btn:hover { border-color: var(--accent2); color: var(--text); }
+  .thick-btn.active { border-color: var(--accent); color: var(--accent); background: #2a2410; }
+
   .sync-ok { color: var(--green); }
   .sync-pending { color: var(--accent); }
 
@@ -1322,7 +1336,22 @@
     <div class="species-info" id="speciesInfo"></div>
 
     <div class="divider"></div>
-    <div class="section-label">// 04 — Vlastní rozměry (volitelné)</div>
+    <div class="section-label">// 04 — Tloušťka řeziva</div>
+
+    <div style="margin-bottom:12px;">
+      <label style="font-size:0.8rem;color:var(--muted);font-family:'IBM Plex Mono',monospace;letter-spacing:1px;display:block;margin-bottom:8px;">Preferovaná tloušťka prken/fošen</label>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;" id="thicknessSelector">
+        <button class="thick-btn" data-t="2" onclick="selectThickness(this)">2 cm</button>
+        <button class="thick-btn" data-t="3" onclick="selectThickness(this)">3 cm</button>
+        <button class="thick-btn active" data-t="4" onclick="selectThickness(this)">4 cm</button>
+        <button class="thick-btn" data-t="5" onclick="selectThickness(this)">5 cm</button>
+        <button class="thick-btn" data-t="6" onclick="selectThickness(this)">6 cm</button>
+        <button class="thick-btn" data-t="0" onclick="selectThickness(this)">Auto</button>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+    <div class="section-label">// 05 — Vlastní rozměry (volitelné)</div>
 
     <div id="customDims">
       <!-- filled dynamically -->
@@ -1611,107 +1640,81 @@ const STANDARD_PRODUCTS = {
 };
 
 function fitsInCircle(w, h, r) {
-  // check all 4 corners of centered rectangle
   const hw = w / 2, hh = h / 2;
   return (Math.sqrt(hw * hw + hh * hh) <= r);
 }
 
-function findBestPlan(rEff, kerf, priority, customItems) {
-  // Build candidate list
-  let candidates = [];
+// Max width (whole cm) of a horizontal plank centered at y, with height h, inside circle r
+function maxWidthAtY(y, h, r) {
+  // The plank occupies y-h/2 to y+h/2 vertically
+  // The limiting constraint is the corner furthest from center
+  const yEdge = Math.abs(y) + h / 2;
+  if (yEdge > r) return 0;
+  const halfW = Math.sqrt(r * r - yEdge * yEdge);
+  return Math.floor(halfW * 2); // whole cm, total width
+}
 
-  for (const [type, items] of Object.entries(STANDARD_PRODUCTS)) {
-    if (!activeTypes.has(type)) continue;
-    for (const item of items) {
-      if (fitsInCircle(item.w, item.h, rEff)) {
-        candidates.push({ ...item, type });
-      }
-    }
-  }
+// ─── NEW FULL-CIRCLE SLICE OPTIMIZER ─────────────────────────────────────────
+let selectedThickness = 4;
 
-  // Add custom dims
-  for (const id of customDimsList) {
-    const cw = parseFloat(document.getElementById('cw_' + id)?.value);
-    const ch = parseFloat(document.getElementById('ch_' + id)?.value);
-    if (cw > 0 && ch > 0 && fitsInCircle(cw, ch, rEff)) {
-      candidates.push({ w: cw, h: ch, name: `Vlastní ${cw}×${ch}`, type: 'custom' });
-    }
-  }
+function selectThickness(btn) {
+  document.querySelectorAll('.thick-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  selectedThickness = parseInt(btn.dataset.t);
+}
 
-  if (candidates.length === 0) return null;
+function findBestPlan(rEff, kerfCm, priority) {
+  const pieces = [];
+  const kerfH = kerfCm; // kerf in cm
 
-  // Sort by priority + area
-  if (priority !== 'auto') {
-    candidates.sort((a, b) => {
-      const aP = a.type === priority ? 1 : 0;
-      const bP = b.type === priority ? 1 : 0;
-      if (aP !== bP) return bP - aP;
-      return (b.w * b.h) - (a.w * a.h);
-    });
-  } else {
-    candidates.sort((a, b) => (b.w * b.h) - (a.w * a.h));
-  }
+  // Determine thickness sequence to try
+  // For each "row" from top to bottom, pick best fitting thickness
+  const thickOptions = selectedThickness === 0
+    ? [6, 5, 4, 3, 2]   // auto: try all
+    : [selectedThickness, ...([6,5,4,3,2].filter(t => t !== selectedThickness))];
 
-  // Greedy pack: fill circle with pieces
-  // Strategy: Try to fit a central piece + side boards
-  const plans = [];
+  // Slice from top of circle downward
+  let y = rEff; // current top edge, moving down
+  let totalArea = 0;
 
-  // Plan A: Center large piece + flank boards
-  for (const center of candidates) {
-    if (!fitsInCircle(center.w, center.h, rEff)) continue;
+  while (y > -rEff) {
+    let placed = false;
 
-    const plan = { pieces: [{ ...center, x: 0, y: 0, label: 'střed' }], totalArea: center.w * center.h };
+    for (const t of thickOptions) {
+      const centerY = y - t / 2; // center of this plank
+      const w = maxWidthAtY(centerY, t, rEff);
 
-    // Try to add boards above and below center piece
-    const topY = center.h / 2 + kerf / 10;
-    const remainTopR = rEff - topY;
+      if (w < 2) break; // too narrow, stop
 
-    if (remainTopR > 2) {
-      // Find best fitting plank for the sides
-      for (const side of candidates) {
-        if (side.h > remainTopR * 2 - 0.5) continue;
-        const halfH = side.h / 2;
-        const plankY = topY + halfH;
-        if (fitsInCircle(side.w, side.h, rEff) && (plankY + halfH) <= rEff) {
-          plan.pieces.push({ ...side, x: 0, y: topY + halfH, label: 'nad středem' });
-          plan.pieces.push({ ...side, x: 0, y: -(topY + halfH), label: 'pod středem' });
-          plan.totalArea += side.w * side.h * 2;
-          break;
-        }
-      }
-    }
+      // Determine type based on thickness
+      let type = 'prkno';
+      let name = `Prkno ${w}×${t}`;
+      if (t >= 6) { type = 'fosnka'; name = `Fošna ${w}×${t}`; }
+      else if (t >= 4) { type = 'fosnka'; name = `Fošna ${w}×${t}`; }
+      else if (t >= 3) { type = 'prkno'; name = `Prkno ${w}×${t}`; }
 
-    // Try to add narrow boards on the sides
-    const sideX = center.w / 2 + kerf / 10;
-    const remainSideR = rEff - sideX;
+      // Override with priority
+      if (priority === 'tram' && w === t && t >= 8) { type = 'tram'; name = `Trám ${w}×${t}`; }
+      if (priority === 'hranol' && t >= 6 && w > t) { type = 'hranol'; name = `Hranol ${w}×${t}`; }
 
-    if (remainSideR > 2) {
-      for (const side of candidates) {
-        if (side.type !== 'prkno' && side.type !== 'fosnka') continue;
-        // Rotate: side board fits as w becomes height direction
-        const rw = Math.min(side.w, side.h);
-        const rh = Math.max(side.w, side.h);
-        if (rw > remainSideR * 2) continue;
-        const bx = sideX + rw / 2;
-        if (fitsInCircle(rw, Math.min(rh, center.h), rEff)) {
-          const bh = Math.min(rh, center.h * 0.8);
-          plan.pieces.push({ w: rw, h: bh, x: bx, y: 0, name: side.name + ' (bok)', type: side.type, label: 'vpravo' });
-          plan.pieces.push({ w: rw, h: bh, x: -bx, y: 0, name: side.name + ' (bok)', type: side.type, label: 'vlevo' });
-          plan.totalArea += rw * bh * 2;
-          break;
-        }
-      }
+      pieces.push({
+        w, h: t,
+        x: 0, y: centerY,
+        name, type,
+        label: centerY > 0 ? 'nahoře' : centerY < 0 ? 'dole' : 'střed'
+      });
+
+      totalArea += w * t;
+      y = y - t - kerfH; // move down by thickness + kerf
+      placed = true;
+      break;
     }
 
-    plans.push(plan);
-    if (plans.length >= 4) break;
+    if (!placed) break;
   }
 
-  if (plans.length === 0) return null;
-
-  // Pick plan with highest total area
-  plans.sort((a, b) => b.totalArea - a.totalArea);
-  return plans[0];
+  if (pieces.length === 0) return null;
+  return { pieces, totalArea };
 }
 
 // ─── MAIN CALCULATE ──────────────────────────────────────────────────────────
@@ -1735,7 +1738,7 @@ function calculate() {
 
   const circleArea = Math.PI * rEff * rEff;
 
-  const plan = findBestPlan(rEff, kerf / 10, priority, []);
+  const plan = findBestPlan(rEff, kerf / 10, priority);
 
   // Show results
   document.getElementById('emptyState').style.display = 'none';
