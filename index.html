@@ -1244,10 +1244,26 @@
       <input type="number" id="length" placeholder="400" min="50" max="2000" step="10">
     </div>
 
-    <div class="input-group">
-      <label>Tloušťka řezu pily (kerf) <span class="unit-badge">mm</span></label>
-      <input type="number" id="kerf" value="3" min="1" max="8" step="0.5">
-      <div class="kerf-note">Standardní pásová pila: 3–4 mm</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="input-group" style="margin:0;">
+        <label>Tloušťka řezu pily (kerf) <span class="unit-badge">mm</span></label>
+        <input type="number" id="kerf" value="3" min="1" max="8" step="0.5">
+        <div class="kerf-note">Standardní pásová pila: 3–4 mm</div>
+      </div>
+      <div class="input-group" style="margin:0;">
+        <label>Průměr zadán</label>
+        <div style="display:flex;gap:6px;margin-top:4px;">
+          <button id="barkOn" onclick="setBarkMode(true)"
+            style="flex:1;padding:8px 4px;font-family:'IBM Plex Mono',monospace;font-size:0.75rem;border:1px solid var(--accent);background:var(--accent);color:#1a1a14;cursor:pointer;letter-spacing:1px;">
+            S KŮROU
+          </button>
+          <button id="barkOff" onclick="setBarkMode(false)"
+            style="flex:1;padding:8px 4px;font-family:'IBM Plex Mono',monospace;font-size:0.75rem;border:1px solid #3a3528;background:transparent;color:var(--muted);cursor:pointer;letter-spacing:1px;">
+            BEZ KŮRY
+          </button>
+        </div>
+        <div class="kerf-note" id="barkNote">Kůra dle dřeviny se odečte automaticky</div>
+      </div>
     </div>
 
     <div class="divider"></div>
@@ -1386,6 +1402,9 @@
         <div class="results-title">Řezný plán</div>
         <div class="efficiency-badge" id="efficiencyBadge">Výtěžnost: —%</div>
       </div>
+
+      <!-- Info bar -->
+      <div id="infoBar" style="font-family:'IBM Plex Mono',monospace;font-size:0.72rem;color:var(--muted);background:#1a1810;border:1px solid #3a3020;padding:8px 12px;margin-bottom:12px;display:none;"></div>
 
       <!-- Cross-section SVG -->
       <div class="viz-container">
@@ -1671,8 +1690,22 @@ function maxWidthAtY(y, h, r) {
   return Math.floor(halfW * 2); // whole cm, total width
 }
 
-// ─── NEW FULL-CIRCLE SLICE OPTIMIZER ─────────────────────────────────────────
-let selectedThickness = 5;
+let barkMode = true; // true = s kůrou, false = bez kůry
+
+function setBarkMode(withBark) {
+  barkMode = withBark;
+  document.getElementById('barkOn').style.background  = withBark ? 'var(--accent)' : 'transparent';
+  document.getElementById('barkOn').style.color       = withBark ? '#1a1a14' : 'var(--muted)';
+  document.getElementById('barkOn').style.borderColor = withBark ? 'var(--accent)' : '#3a3528';
+  document.getElementById('barkOff').style.background  = !withBark ? 'var(--accent)' : 'transparent';
+  document.getElementById('barkOff').style.color       = !withBark ? '#1a1a14' : 'var(--muted)';
+  document.getElementById('barkOff').style.borderColor = !withBark ? 'var(--accent)' : '#3a3528';
+  document.getElementById('barkNote').textContent = withBark
+    ? 'Kůra dle dřeviny se odečte automaticky'
+    : 'Průměr bez kůry — počítá se přímo';
+}
+
+
 
 function selectThickness(btn) {
   document.querySelectorAll('.thick-btn').forEach(b => b.classList.remove('active'));
@@ -1680,24 +1713,9 @@ function selectThickness(btn) {
   selectedThickness = parseFloat(btn.dataset.t);
 }
 
-function maxWidthAtY(centerY, h, r) {
-  // Worst corner is at |centerY| + h/2 from center vertically
-  const yEdge = Math.abs(centerY) + h / 2;
-  if (yEdge >= r) return 0;
-  const halfW = Math.sqrt(r * r - yEdge * yEdge);
-  return Math.floor(halfW * 2); // whole cm
-}
-
 function findBestPlan(rEff, kerfCm, priority) {
-  // Všechny dostupné tloušťky v cm
   const ALL_THICKS = [8, 6, 5, 4, 3, 2.5, 2];
-  const thickOptions = selectedThickness === 0
-    ? ALL_THICKS
-    : [selectedThickness, ...ALL_THICKS.filter(t => t !== selectedThickness)];
-
-  // Tloušťky prken (≤ 3.5 cm) a fošen (> 3.5 cm)
-  const fosnkaThicks = thickOptions.filter(t => t > 3.5);   // 8,6,5,4
-  const prknoThicks  = thickOptions.filter(t => t <= 3.5);  // 3,2.5,2
+  const MIN_BOARD_WIDTH = 6; // min šířka prkna/fošny v cm
 
   const hasTram   = activeTypes.has('tram');
   const hasHranol = activeTypes.has('hranol');
@@ -1705,9 +1723,8 @@ function findBestPlan(rEff, kerfCm, priority) {
   const hasPrkno  = activeTypes.has('prkno');
   const hasLat    = activeTypes.has('lat');
   const wantsBeam  = hasTram || hasHranol;
-  const wantsBoard = hasFosnka || hasPrkno || hasLat;
+  const wantsBoard = hasFosnka || hasPrkno;
 
-  // Rozměry sortimentů
   const TRAM_SIZES   = [20, 18, 16, 14, 12, 10, 8];
   const HRANOL_SIZES = [
     {w:14,h:12},{w:12,h:14},{w:12,h:10},{w:10,h:12},
@@ -1715,142 +1732,142 @@ function findBestPlan(rEff, kerfCm, priority) {
   ];
   const LAT_SIZES = [{w:6,h:4},{w:5,h:5},{w:4,h:6},{w:4,h:4},{w:3,h:5},{w:5,h:3}];
 
-  // Fill a vertical range with boards (prkna/fošny/latě)
-  function fillBoards(topEdge, bottomLimit, pieces, areaRef) {
-    let te = topEdge;
-    let noFit = 0;
+  // Povolené tloušťky prken/fošen
+  let boardThicks = [];
+  if (selectedThickness > 0) {
+    boardThicks = [selectedThickness];
+  } else {
+    if (hasFosnka) ALL_THICKS.filter(t => t > 3.5).forEach(t => boardThicks.push(t));
+    if (hasPrkno)  ALL_THICKS.filter(t => t <= 3.5).forEach(t => boardThicks.push(t));
+  }
 
-    // Sestav seznam tloušťek které smíme použít dle zakliknutých kategorií
-    const allowedThicks = [];
-    if (hasFosnka) fosnkaThicks.forEach(t => { if (!allowedThicks.includes(t)) allowedThicks.push(t); });
-    if (hasPrkno)  prknoThicks.forEach(t  => { if (!allowedThicks.includes(t)) allowedThicks.push(t); });
-    // Seřaď: preferovaná tloušťka první, zbytek od největší
-    allowedThicks.sort((a,b) => {
-      if (selectedThickness > 0) {
-        if (a === selectedThickness) return -1;
-        if (b === selectedThickness) return 1;
-      }
-      return b - a;
-    });
-
-    while (noFit < 60) {
-      let best = null;
-
-      // Zkus prkna/fošny
-      for (const t of allowedThicks) {
-        const bot = te - t;
-        if (bot < bottomLimit - 0.05) continue;
-        const cy = (te+bot)/2;
+  // ── Najdi nejlepší tloušťku prken pro daný rozsah výšky ──────────────────
+  function bestThickFor(from, to) {
+    if (from - to < 1.5 || boardThicks.length === 0) return null;
+    let best = null, bestArea = 0;
+    for (const t of boardThicks) {
+      if (t > from - to + 0.1) continue;
+      let te = from, area = 0, iters = 0;
+      while (te - t >= to - 0.05 && iters++ < 100) {
+        const cy = te - t / 2;
         const w = maxWidthAtY(cy, t, rEff);
-        if (w >= 2) {
-          const a = w * t;
-          const type = t > 3.5 ? 'fosnka' : 'prkno';
-          const label = t > 3.5 ? 'Fošna' : 'Prkno';
-          if (!best || a > best.area)
-            best = {w, h:t, bot, cy, area:a, type, name:`${label} ${w}×${(t*10).toFixed(0)} mm`};
-          break; // první která se vejde při dané tloušťce
-        }
+        if (w >= MIN_BOARD_WIDTH) { area += w * t; te -= t + kerfCm; }
+        else te -= 0.05;
       }
+      if (area > bestArea) { bestArea = area; best = t; }
+    }
+    return best;
+  }
 
-      // Zkus latě
-      if (hasLat) {
+  // ── Vyplň rozsah prkny (jedna konzistentní tloušťka) ─────────────────────
+  function fillBoards(from, to, pieces, areaRef) {
+    if (!wantsBoard || from - to < 1.5) return;
+    const t = bestThickFor(from, to);
+    if (!t) return;
+    const type  = t > 3.5 ? 'fosnka' : 'prkno';
+    const label = t > 3.5 ? 'Fošna'  : 'Prkno';
+    let te = from, nofit = 0;
+    while (nofit < 30) {
+      const bot = te - t;
+      if (bot < to - 0.05) break;
+      const cy = (te + bot) / 2;
+      const w = maxWidthAtY(cy, t, rEff);
+      if (w >= MIN_BOARD_WIDTH) {
+        pieces.push({ w, h:t, x:0, y:cy, name:`${label} ${w}×${Math.round(t*10)} mm`, type, label: cy>=0?'nahoře':'dole' });
+        areaRef.v += w * t;
+        te = bot - kerfCm;
+        nofit = 0;
+      } else { te -= 0.05; nofit++; }
+    }
+    // Latě ze zbytku
+    if (hasLat) {
+      let noFitL = 0;
+      while (noFitL < 10) {
+        let placed = false;
         for (const ls of LAT_SIZES) {
           const bot = te - ls.h;
-          if (bot < bottomLimit - 0.05) continue;
-          const cy = (te+bot)/2;
+          if (bot < to - 0.05) continue;
+          const cy = (te + bot) / 2;
           const w = maxWidthAtY(cy, ls.h, rEff);
           if (w >= ls.w) {
-            const a = ls.w * ls.h;
-            if (!best || a > best.area)
-              best = {w:ls.w, h:ls.h, bot, cy, area:a, type:'lat', name:`Lať ${ls.w}×${ls.h} cm`};
-            break;
+            pieces.push({ w:ls.w, h:ls.h, x:0, y:cy, name:`Lať ${ls.w}×${ls.h} cm`, type:'lat', label: cy>=0?'nahoře':'dole' });
+            areaRef.v += ls.w * ls.h;
+            te = bot - kerfCm;
+            placed = true; break;
           }
         }
+        if (!placed) { te -= 0.05; noFitL++; }
+        if (te < to) break;
       }
-
-      if (best) {
-        pieces.push({w:best.w, h:best.h, x:0, y:best.cy, name:best.name, type:best.type, label:best.cy>=0?'nahoře':'dole'});
-        areaRef.v += best.area;
-        te = best.bot - kerfCm;
-        noFit = 0;
-      } else { te -= 0.1; noFit++; }
-      if (te < bottomLimit + 0.4) break;
     }
   }
 
-  // Fill a vertical range with beams (trámy/hranoly)
-  function fillBeams(topEdge, bottomLimit, pieces, areaRef) {
-    let te = topEdge;
-    let noFit = 0;
-    while (noFit < 60) {
-      let best = null;
-      if (hasTram) {
-        for (const s of TRAM_SIZES) {
-          const bot=te-s; if(bot<bottomLimit-0.05) continue;
-          const cy=(te+bot)/2; const w=maxWidthAtY(cy,s,rEff);
-          if(w>=s){const a=s*s; if(!best||a>best.area) best={w:s,h:s,bot,cy,area:a,type:'tram',name:`Trám ${s}×${s} cm`}; break;}
-        }
-      }
-      if (hasHranol) {
-        for (const hs of HRANOL_SIZES) {
-          const bot=te-hs.h; if(bot<bottomLimit-0.05) continue;
-          const cy=(te+bot)/2; const w=maxWidthAtY(cy,hs.h,rEff);
-          if(w>=hs.w){const a=hs.w*hs.h; if(!best||a>best.area) best={w:hs.w,h:hs.h,bot,cy,area:a,type:'hranol',name:`Hranol ${hs.w}×${hs.h} cm`}; break;}
-        }
-      }
-      if (best) {
-        pieces.push({w:best.w,h:best.h,x:0,y:best.cy,name:best.name,type:best.type,label:best.cy>=0?'nahoře':'dole'});
-        areaRef.v += best.area;
-        te = best.bot - kerfCm;
-        noFit = 0;
-      } else { te -= 0.1; noFit++; }
-      if (te < bottomLimit + 0.4) break;
-    }
-  }
-
-  // ── ONLY BOARDS ─────────────────────────────────────────────────────────────
-  if (!wantsBeam) {
-    const pieces=[]; const areaRef={v:0};
-    fillBoards(rEff-0.01, -rEff+0.5, pieces, areaRef);
-    return pieces.length ? {pieces, totalArea:areaRef.v} : null;
-  }
-
-  // ── ONLY BEAMS ──────────────────────────────────────────────────────────────
-  if (!wantsBoard) {
-    const pieces=[]; const areaRef={v:0};
-    fillBeams(rEff-0.01, -rEff+0.5, pieces, areaRef);
-    return pieces.length ? {pieces, totalArea:areaRef.v} : null;
-  }
-
-  // ── BEAMS + BOARDS: find optimal beam position ───────────────────────────────
-  // Try every 0.5cm step, find beam position that maximizes TOTAL area (beam + boards above + boards below)
-  let globalBest = null;
-
-  for (let te = rEff - 0.01; te > -rEff + 2; te -= 0.5) {
+  // ── Najdi největší trám/hranol který se vejde — centrovaně ───────────────
+  function findBestBeam() {
+    // Seřaď od největšího
     const candidates = [];
-    if (hasTram) for (const s of TRAM_SIZES) {
-      const bot=te-s; if(bot<-rEff) continue;
-      const cy=(te+bot)/2; const w=maxWidthAtY(cy,s,rEff);
-      if(w>=s) candidates.push({w:s,h:s,bot,cy,topEdge:te,type:'tram',name:`Trám ${s}×${s} cm`,beamArea:s*s});
-    }
-    if (hasHranol) for (const hs of HRANOL_SIZES) {
-      const bot=te-hs.h; if(bot<-rEff) continue;
-      const cy=(te+bot)/2; const w=maxWidthAtY(cy,hs.h,rEff);
-      if(w>=hs.w) candidates.push({w:hs.w,h:hs.h,bot,cy,topEdge:te,type:'hranol',name:`Hranol ${hs.w}×${hs.h} cm`,beamArea:hs.w*hs.h});
-    }
+    if (hasTram)   TRAM_SIZES.forEach(s => candidates.push({w:s, h:s, area:s*s, type:'tram', name:`Trám ${s}×${s} cm`}));
+    if (hasHranol) HRANOL_SIZES.forEach(hs => candidates.push({w:hs.w, h:hs.h, area:hs.w*hs.h, type:'hranol', name:`Hranol ${hs.w}×${hs.h} cm`}));
+    candidates.sort((a, b) => b.area - a.area);
 
-    for (const beam of candidates) {
-      const pcs=[]; const ar={v:0};
-      pcs.push({w:beam.w,h:beam.h,x:0,y:beam.cy,name:beam.name,type:beam.type,label:beam.cy>=0?'nahoře':'dole'});
-      ar.v = beam.beamArea;
-      fillBoards(beam.topEdge - kerfCm > rEff-0.5 ? rEff-0.01 : beam.topEdge, beam.topEdge - kerfCm, pcs, ar);
-      fillBoards(beam.bot - kerfCm, -rEff+0.5, pcs, ar);
-      if (!globalBest || ar.v > globalBest.totalArea)
-        globalBest = {pieces:[...pcs], totalArea:ar.v};
+    for (const b of candidates) {
+      // Zkus centrovaně (nejlepší pozice)
+      const cy = 0;
+      const w = maxWidthAtY(cy, b.h, rEff);
+      if (w >= b.w) {
+        return { ...b, cy, topEdge: b.h/2, botEdge: -b.h/2 };
+      }
     }
+    return null;
   }
 
-  return globalBest && globalBest.pieces.length ? globalBest : null;
+  // ── Jen prkna (bez trámu) ────────────────────────────────────────────────
+  if (!wantsBeam && !hasLat) {
+    if (!wantsBoard) return null;
+    const pieces = []; const areaRef = {v:0};
+    fillBoards(rEff - 0.01, -rEff + 0.5, pieces, areaRef);
+    return pieces.length ? {pieces, totalArea: areaRef.v} : null;
+  }
+
+  // ── Jen latě ────────────────────────────────────────────────────────────
+  if (!wantsBeam && !wantsBoard && hasLat) {
+    const pieces = []; const areaRef = {v:0};
+    let te = rEff - 0.01, noFit = 0;
+    while (noFit < 20) {
+      let placed = false;
+      for (const ls of LAT_SIZES) {
+        const bot = te - ls.h;
+        if (bot < -rEff + 0.5) continue;
+        const cy = (te+bot)/2;
+        const w = maxWidthAtY(cy, ls.h, rEff);
+        if (w >= ls.w) {
+          pieces.push({w:ls.w,h:ls.h,x:0,y:cy,name:`Lať ${ls.w}×${ls.h} cm`,type:'lat',label:cy>=0?'nahoře':'dole'});
+          areaRef.v += ls.w * ls.h;
+          te = bot - kerfCm; placed = true; break;
+        }
+      }
+      if (!placed) { te -= 0.05; noFit++; }
+      if (te < -rEff + 0.5) break;
+    }
+    return pieces.length ? {pieces, totalArea: areaRef.v} : null;
+  }
+
+  // ── Trám + prkna ─────────────────────────────────────────────────────────
+  const beam = findBestBeam();
+  const pieces = []; const areaRef = {v:0};
+
+  if (beam) {
+    pieces.push({ w:beam.w, h:beam.h, x:0, y:beam.cy, name:beam.name, type:beam.type, label:'střed' });
+    areaRef.v += beam.area;
+    if (wantsBoard) {
+      fillBoards(rEff - 0.01, beam.topEdge + kerfCm, pieces, areaRef);
+      fillBoards(beam.botEdge - kerfCm, -rEff + 0.5, pieces, areaRef);
+    }
+  } else if (wantsBoard) {
+    fillBoards(rEff - 0.01, -rEff + 0.5, pieces, areaRef);
+  }
+
+  return pieces.length ? {pieces, totalArea: areaRef.v} : null;
 }
 
 // ─── MAIN CALCULATE ──────────────────────────────────────────────────────────
@@ -1867,10 +1884,23 @@ function calculate() {
     return;
   }
 
-  const dMin = Math.min(dStart, dMid || dStart, dEnd); // critical cross-section
+  const dMin = Math.min(dStart, dMid || dStart, dEnd);
   const rRaw = dMin / 2;
-  const BARK = 1.0; // bark each side in cm
+  const BARK = barkMode ? (SPECIES[selectedSpecies]?.bark || 1.0) : 0;
   const rEff = rRaw - BARK;
+
+  if (rEff < 3) {
+    alert(`Efektivní průměr po odečtení kůry je příliš malý (${(rEff*2).toFixed(1)} cm). Zkontrolujte zadané hodnoty.`);
+    return;
+  }
+
+  // Info bar
+  const maxBeamTheo = (rEff * Math.SQRT2).toFixed(1);
+  const infoBar = document.getElementById('infoBar');
+  infoBar.style.display = 'block';
+  infoBar.innerHTML = barkMode
+    ? `⌀ ${dMin} cm − kůra ${BARK} cm/str. = efektivní ⌀ <strong style="color:var(--accent)">${(rEff*2).toFixed(1)} cm</strong> &nbsp;|&nbsp; max. trám ≈ <strong style="color:var(--accent)">${maxBeamTheo} cm</strong>`
+    : `⌀ ${dMin} cm (bez kůry) &nbsp;|&nbsp; max. trám ≈ <strong style="color:var(--accent)">${maxBeamTheo} cm</strong>`;
 
   const circleArea = Math.PI * rEff * rEff;
 
@@ -2278,16 +2308,76 @@ function buildSteps(plan, rEff, kerf, dStart, dMid, dEnd, length) {
 // ─── WOOD SPECIES DATA ───────────────────────────────────────────────────────
 const SPECIES = {
   smrk: {
-    name: 'Smrk obecný',
-    density: 470, // kg/m³ při 15% vlhkosti
-    hardness: 'Měkké',
-    difficulty: 1.0, // násobič obtížnosti řezání
-    moisture_ideal: '18–25 %',
-    best_for: 'Trámy, prkna, střešní latě, bednění, palubky',
+    name: 'Smrk obecný', density: 470, hardness: 'Měkké', difficulty: 1.0,
+    bark: 1.0, // tloušťka kůry cm/strana (průměrná hodnota)
+    moisture_ideal: '18–25 %', best_for: 'Trámy, prkna, střešní latě, bednění, palubky',
     notes: 'Nejběžnější jehličnan v ČR. Dobře se řeže, rychlé sušení. Pozor na suky u starších stromů.',
-    vady: 'Suky, pryskyřičné kapsy, modrání při vlhkosti',
-    price_m3: '1 800–2 800 Kč/m³',
+    vady: 'Suky, pryskyřičné kapsy, modrání při vlhkosti', price_m3: '1 800–2 800 Kč/m³',
   },
+  borovice: {
+    name: 'Borovice lesní', density: 520, hardness: 'Měkké', difficulty: 1.1,
+    bark: 1.5,
+    moisture_ideal: '18–25 %', best_for: 'Trámy, prkna, podlahy, okna, nábytek',
+    notes: 'Pryskyřičnatější než smrk — pila se rychleji zanáší. Odolnější vůči vlhkosti.',
+    vady: 'Pryskyřičné kapsy, velké suky, točivost vláken', price_m3: '2 000–3 200 Kč/m³',
+  },
+  modrin: {
+    name: 'Modřín opadavý', density: 590, hardness: 'Střední', difficulty: 1.2,
+    bark: 1.5,
+    moisture_ideal: '15–20 %', best_for: 'Terasy, fasády, okna, lodní paluba, mosty',
+    notes: 'Přirozeně odolný proti hnilobě. Vhodný do exteriéru bez impregnace. Hůře se řeže než smrk.',
+    vady: 'Točivost vláken, rychlé otupování listů', price_m3: '2 500–4 000 Kč/m³',
+  },
+  dub: {
+    name: 'Dub letní/zimní', density: 720, hardness: 'Tvrdé', difficulty: 1.8,
+    bark: 2.0,
+    moisture_ideal: '15–20 %', best_for: 'Podlahy, nábytek, sudy, trámy, schodiště',
+    notes: 'Prémiové dřevo. Řezání trvá 2× déle než jehličnany. Rychle otupuje pásy pily — počítejte s více výměnami.',
+    vady: 'Trhliny při rychlém sušení, třísloviny barví kovové spoje', price_m3: '4 000–8 000 Kč/m³',
+  },
+  buk: {
+    name: 'Buk lesní', density: 720, hardness: 'Tvrdé', difficulty: 1.7,
+    bark: 0.7,
+    moisture_ideal: '12–18 %', best_for: 'Nábytek, podlahy, schody, hračky, nářadí',
+    notes: 'Musí se rychle sušit — náchylné k trhání. Nelze použít v exteriéru. Homogenní struktura — krásně opracovatelné.',
+    vady: 'Náchylné k trhání při sušení, červenání jádra', price_m3: '3 500–6 000 Kč/m³',
+  },
+  habr: {
+    name: 'Habr obecný', density: 830, hardness: 'Velmi tvrdé', difficulty: 2.2,
+    bark: 0.5,
+    moisture_ideal: '12–15 %', best_for: 'Nástroje, ozubená kola, parkety, řezbářství',
+    notes: 'Nejtěžší domácí dřevo. Velmi náročné na pilu — krátké pásy, pomalý posuv. Speciální použití.',
+    vady: 'Točivá vlákna, obtížné sušení', price_m3: '5 000–9 000 Kč/m³',
+  },
+  javor: {
+    name: 'Javor klen/mléč', density: 650, hardness: 'Tvrdé', difficulty: 1.6,
+    bark: 0.8,
+    moisture_ideal: '12–18 %', best_for: 'Hudební nástroje, nábytek, podlahy, kuchyňské desky',
+    notes: 'Krásná světlá kresba. Řeže se dobře ale pomaleji než jehličnany. Cenné dřevo.',
+    vady: 'Zbarvení při oxidaci, náchylné k houbám při vlhkosti', price_m3: '4 000–7 000 Kč/m³',
+  },
+  jasan: {
+    name: 'Jasan ztepilý', density: 690, hardness: 'Tvrdé / pružné', difficulty: 1.6,
+    bark: 1.0,
+    moisture_ideal: '12–18 %', best_for: 'Nábytek, sportovní náčiní, rukojeti, schodiště',
+    notes: 'Velmi pružné — oblíbené na sportovní náčiní. Ohrožen jasanovou chřadnutím (Hymenoscyphus). Zkontrolujte zdraví stromu.',
+    vady: 'Jasanová chřadnutí, nestabilita při vlhkostních změnách', price_m3: '3 500–6 500 Kč/m³',
+  },
+  bříza: {
+    name: 'Bříza bělokorá', density: 620, hardness: 'Středně tvrdé', difficulty: 1.4,
+    bark: 0.5,
+    moisture_ideal: '15–20 %', best_for: 'Překližka, nábytek, dřevěné obaly, hračky',
+    notes: 'Rychle roste, levná. Nestabilní při vlhkosti — méně vhodná pro konstrukční účely. Krásná bílá kůra.',
+    vady: 'Velká sesychavost, náchylné k hnilobě v exteriéru', price_m3: '1 500–2 500 Kč/m³',
+  },
+  osika: {
+    name: 'Osika / Topol', density: 450, hardness: 'Měkké / lehké', difficulty: 0.9,
+    bark: 0.5,
+    moisture_ideal: '20–30 %', best_for: 'Zápalky, překližka, papír, palety, bedny',
+    notes: 'Nejlehčí domácí dřevo. Snadno se řeže. Nízká hodnota pro konstrukční použití.',
+    vady: 'Malá pevnost, rychlé hnití v exteriéru', price_m3: '800–1 500 Kč/m³',
+  },
+};
   borovice: {
     name: 'Borovice lesní',
     density: 520,
@@ -2676,16 +2766,8 @@ function addZKulatina() {
     <div style="font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:var(--muted);margin-bottom:8px;letter-spacing:1px;">KULATINA #${zKulatinyIds.length}</div>
     <div class="zkr-inputs">
       <div class="input-group" style="margin:0;">
-        <label>⌀ začátek <span class="unit-badge">cm</span></label>
-        <input type="number" id="zkds_${id}" placeholder="30" min="5" max="120" step="1" oninput="updateZSouhrn()">
-      </div>
-      <div class="input-group" style="margin:0;">
-        <label>⌀ střed <span class="unit-badge">cm</span></label>
+        <label>⌀ průměr střed <span class="unit-badge">cm</span></label>
         <input type="number" id="zkdm_${id}" placeholder="27" min="5" max="120" step="1" oninput="updateZSouhrn()">
-      </div>
-      <div class="input-group" style="margin:0;">
-        <label>⌀ konec <span class="unit-badge">cm</span></label>
-        <input type="number" id="zkde_${id}" placeholder="22" min="5" max="120" step="1" oninput="updateZSouhrn()">
       </div>
       <div class="input-group" style="margin:0;">
         <label>Délka <span class="unit-badge">cm</span></label>
@@ -2703,11 +2785,11 @@ function removeZKulatina(id) {
   updateZSouhrn();
 }
 
-function calcM3fromLog(dStart, dMid, dEnd, lengthCm) {
+function calcM3fromLog(dMid, lengthCm) {
   // Huberova metoda: V = průřez středu × délka
-  const dMin = Math.min(dStart, dMid || dStart, dEnd);
-  const rEff = (dMin / 2) - 1; // mínus kůra
-  const areaM2 = Math.PI * (rEff / 100) * (rEff / 100);
+  const r = (dMid / 2) - 1; // mínus kůra
+  if (r <= 0) return 0;
+  const areaM2 = Math.PI * (r / 100) * (r / 100);
   return areaM2 * (lengthCm / 100);
 }
 
@@ -2718,15 +2800,13 @@ function updateZSouhrn() {
   const rows = [];
 
   for (const id of zKulatinyIds) {
-    const ds = parseFloat(document.getElementById('zkds_' + id)?.value) || 0;
     const dm = parseFloat(document.getElementById('zkdm_' + id)?.value) || 0;
-    const de = parseFloat(document.getElementById('zkde_' + id)?.value) || 0;
     const dl = parseFloat(document.getElementById('zkdl_' + id)?.value) || 0;
-    if (ds > 0 && de > 0 && dl > 0) {
-      const m3 = calcM3fromLog(ds, dm, de, dl);
+    if (dm > 0 && dl > 0) {
+      const m3 = calcM3fromLog(dm, dl);
       totalM3 += m3;
       validCount++;
-      rows.push({ ds, dm, de, dl, m3 });
+      rows.push({ dm, dl, m3 });
     }
   }
 
@@ -2735,7 +2815,7 @@ function updateZSouhrn() {
   const totalCena = sazba > 0 ? totalM3 * sazba : null;
   let html = '';
   rows.forEach((r, i) => {
-    html += `<div class="zs-row"><span class="zs-label">Kulatina ${i+1} (⌀${Math.min(r.ds,r.dm||r.ds,r.de)} cm, ${r.dl} cm)</span><span class="zs-val">${r.m3.toFixed(3)} m³</span></div>`;
+    html += `<div class="zs-row"><span class="zs-label">Kulatina ${i+1} (⌀${r.dm} cm, ${r.dl} cm)</span><span class="zs-val">${r.m3.toFixed(3)} m³</span></div>`;
   });
   html += `<div class="zs-row"><span class="zs-label">Celkem m³</span><span class="zs-val">${totalM3.toFixed(3)} m³</span></div>`;
   if (totalCena !== null) {
@@ -2751,12 +2831,10 @@ function saveZakazka() {
 
   const kulatiny = [];
   for (const id of zKulatinyIds) {
-    const ds = parseFloat(document.getElementById('zkds_' + id)?.value) || 0;
     const dm = parseFloat(document.getElementById('zkdm_' + id)?.value) || 0;
-    const de = parseFloat(document.getElementById('zkde_' + id)?.value) || 0;
     const dl = parseFloat(document.getElementById('zkdl_' + id)?.value) || 0;
-    if (ds > 0 && de > 0 && dl > 0) {
-      kulatiny.push({ ds, dm, de, dl, m3: calcM3fromLog(ds, dm, de, dl) });
+    if (dm > 0 && dl > 0) {
+      kulatiny.push({ dm, dl, m3: calcM3fromLog(dm, dl) });
     }
   }
 
@@ -2814,9 +2892,7 @@ function editZakazka(id) {
     row.innerHTML = `
       <div style="font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:var(--muted);margin-bottom:8px;">KULATINA</div>
       <div class="zkr-inputs">
-        <div class="input-group" style="margin:0;"><label>⌀ začátek <span class="unit-badge">cm</span></label><input type="number" id="zkds_${kid}" value="${k.ds}" min="5" max="120" step="1" oninput="updateZSouhrn()"></div>
-        <div class="input-group" style="margin:0;"><label>⌀ střed <span class="unit-badge">cm</span></label><input type="number" id="zkdm_${kid}" value="${k.dm||''}" min="5" max="120" step="1" oninput="updateZSouhrn()"></div>
-        <div class="input-group" style="margin:0;"><label>⌀ konec <span class="unit-badge">cm</span></label><input type="number" id="zkde_${kid}" value="${k.de}" min="5" max="120" step="1" oninput="updateZSouhrn()"></div>
+        <div class="input-group" style="margin:0;"><label>⌀ průměr střed <span class="unit-badge">cm</span></label><input type="number" id="zkdm_${kid}" value="${k.dm||k.ds||''}" min="5" max="120" step="1" oninput="updateZSouhrn()"></div>
         <div class="input-group" style="margin:0;"><label>Délka <span class="unit-badge">cm</span></label><input type="number" id="zkdl_${kid}" value="${k.dl}" min="50" max="2000" step="10" oninput="updateZSouhrn()"></div>
         <button class="btn-remove" style="margin-bottom:0;" onclick="removeZKulatina(${kid})">✕</button>
       </div>`;
