@@ -1823,8 +1823,7 @@ function ripCantIntoProducts(cant, kerfCm) {
   return products;
 }
 
-// Boční slabiny — co lze vyřezat z klínů po stranách hranolu
-// Vrací pole kusů s phase:'side'
+// Boční slabiny — symetrické páry od středu ven, stejná šířka na obou bocích
 function recoverSideBoards(cant, rEff, kerfCm) {
   const hasFosnka = activeTypes.has('fosnka');
   const hasPrkno  = activeTypes.has('prkno');
@@ -1841,49 +1840,68 @@ function recoverSideBoards(cant, rEff, kerfCm) {
   }
   if (boardThicks.length === 0) return [];
 
-  // Na každé straně je klín: výška = cant.cantH, šířka na místě y = maxWidthAtY(y, cantH, rEff)/2 - cantW/2
-  const cantHalfW = cant.cantW / 2;
   const cantHalfH = cant.cantH / 2;
-  const products = [];
 
-  // Pro každou tloušťku prkna projdi výšku hranolu vodorovnými řezy
-  // Šířka dostupná v daném sloji y = maxWidthAtY(y, t, rEff) - cantW (celkem oba boky)
-  // Jeden bok = polovina z toho
-  let bestThick = null, bestSideArea = 0;
+  // Vyber tloušťku — symetrické pozice od středu, stejná šířka klínu na celém páru
+  let bestThick = null, bestArea = 0;
   for (const t of boardThicks) {
-    let te = cantHalfH, area = 0, iters = 0;
-    while (te - t >= -cantHalfH + 0.05 && iters++ < 80) {
-      const cy = te - t/2;
-      const fullW = maxWidthAtY(cy, t, rEff);
-      const sideW = Math.floor((fullW - cant.cantW) / 2);
-      if (sideW >= MIN_BOARD_WIDTH) { area += sideW * t * 2; te -= t + kerfCm; }
-      else te -= 0.05;
+    let area = 0;
+    for (const startOdd of [true, false]) {
+      let a = 0;
+      const positions = [];
+      if (startOdd) {
+        positions.push(0);
+        let y = t + kerfCm;
+        while (y + t/2 <= cantHalfH + 0.05) { positions.push(y); positions.push(-y); y += t + kerfCm; }
+      } else {
+        let y = t/2 + kerfCm/2;
+        while (y + t/2 <= cantHalfH + 0.05) { positions.push(y); positions.push(-y); y += t + kerfCm; }
+      }
+      for (const cy of positions) {
+        const fullW = maxWidthAtY(cy, t, rEff);
+        const sideW = Math.floor((fullW - cant.cantW) / 2);
+        if (sideW >= MIN_BOARD_WIDTH) a += sideW * t * 2;
+      }
+      if (a > area) area = a;
     }
-    if (area > bestSideArea) { bestSideArea = area; bestThick = t; }
+    if (area > bestArea) { bestArea = area; bestThick = t; }
   }
 
   if (!bestThick) return [];
 
   const type  = bestThick > 3.5 ? 'fosnka' : 'prkno';
   const label = bestThick > 3.5 ? 'Fošna'  : 'Prkno';
-  let te = cantHalfH, nofit = 0;
-  while (nofit < 20) {
-    const bot = te - bestThick;
-    if (bot < -cantHalfH - 0.05) break;
-    const cy = (te + bot) / 2;
-    const fullW = maxWidthAtY(cy, bestThick, rEff);
-    const sideW = Math.floor((fullW - cant.cantW) / 2);
-    if (sideW >= MIN_BOARD_WIDTH) {
-      // Levý bok
-      products.push({ w:sideW, h:bestThick, x:-(cant.cantW/2 + sideW/2), y:cy,
-        name:`${label} ${sideW}×${Math.round(bestThick*10)} mm`, type, phase:'side', label:'bok' });
-      // Pravý bok (zrcadlově)
-      products.push({ w:sideW, h:bestThick, x:(cant.cantW/2 + sideW/2), y:cy,
-        name:`${label} ${sideW}×${Math.round(bestThick*10)} mm`, type, phase:'side', label:'bok' });
-      te = bot - kerfCm; nofit = 0;
-    } else { te -= 0.05; nofit++; }
+
+  // Vygeneruj symetrické páry — vezmi variantu s větší plochou
+  let bestProducts = [], bestProductsArea = 0;
+  for (const startOdd of [true, false]) {
+    const positions = [];
+    if (startOdd) {
+      positions.push(0);
+      let y = bestThick + kerfCm;
+      while (y + bestThick/2 <= cantHalfH + 0.05) { positions.push(y); positions.push(-y); y += bestThick + kerfCm; }
+    } else {
+      let y = bestThick/2 + kerfCm/2;
+      while (y + bestThick/2 <= cantHalfH + 0.05) { positions.push(y); positions.push(-y); y += bestThick + kerfCm; }
+    }
+
+    const trial = []; let trialArea = 0;
+    for (const cy of positions) {
+      const fullW = maxWidthAtY(cy, bestThick, rEff);
+      const sideW = Math.floor((fullW - cant.cantW) / 2);
+      if (sideW >= MIN_BOARD_WIDTH) {
+        // Levý a pravý bok — stejná šířka, jedním řezem
+        trial.push({ w:sideW, h:bestThick, x:-(cant.cantW/2 + sideW/2), y:cy,
+          name:`${label} ${sideW}×${Math.round(bestThick*10)} mm`, type, phase:'side', label:'bok' });
+        trial.push({ w:sideW, h:bestThick, x:(cant.cantW/2 + sideW/2), y:cy,
+          name:`${label} ${sideW}×${Math.round(bestThick*10)} mm`, type, phase:'side', label:'bok' });
+        trialArea += sideW * bestThick * 2;
+      }
+    }
+    if (trialArea > bestProductsArea) { bestProductsArea = trialArea; bestProducts = trial; }
   }
-  return products;
+
+  return bestProducts;
 }
 
 // Hlavní funkce — sestaví kompletní plán
