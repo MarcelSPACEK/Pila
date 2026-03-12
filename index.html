@@ -1691,6 +1691,7 @@ function maxWidthAtY(y, h, r) {
 }
 
 let barkMode = true; // true = s kůrou, false = bez kůry
+let selectedThickness = 5; // výchozí 50mm — musí být deklarováno před findBestPlan
 
 function setBarkMode(withBark) {
   barkMode = withBark;
@@ -1713,26 +1714,51 @@ function selectThickness(btn) {
   selectedThickness = parseFloat(btn.dataset.t);
 }
 
-function findBestPlan(rEff, kerfCm, priority) {
-  const ALL_THICKS = [8, 6, 5, 4, 3, 2.5, 2];
-  const MIN_BOARD_WIDTH = 6; // min šířka prkna/fošny v cm
+// ─────────────────────────────────────────────────────────────────────────────
+// REALISTICKÝ MODEL PÁSOVÉ PILY
+// Postup: 4 řezy → čistý hranol → rozřezání hranolu na sortiment
+// ─────────────────────────────────────────────────────────────────────────────
 
+// Minimální šířka prkna/fošny — menší kusy jsou odpad
+const MIN_BOARD_WIDTH = 10; // cm
+
+// Najdi největší hranol/trám inscribed v kruhu rEff (centrovaně)
+// Vrací { w, h, type, name, cantW, cantH } kde cantW >= cantH
+function findBestCant(rEff) {
   const hasTram   = activeTypes.has('tram');
   const hasHranol = activeTypes.has('hranol');
-  const hasFosnka = activeTypes.has('fosnka');
-  const hasPrkno  = activeTypes.has('prkno');
-  const hasLat    = activeTypes.has('lat');
-  const wantsBeam  = hasTram || hasHranol;
-  const wantsBoard = hasFosnka || hasPrkno;
 
   const TRAM_SIZES   = [20, 18, 16, 14, 12, 10, 8];
   const HRANOL_SIZES = [
     {w:14,h:12},{w:12,h:14},{w:12,h:10},{w:10,h:12},
     {w:10,h:8},{w:8,h:10},{w:8,h:6},{w:6,h:8}
   ];
-  const LAT_SIZES = [{w:6,h:4},{w:5,h:5},{w:4,h:6},{w:4,h:4},{w:3,h:5},{w:5,h:3}];
 
-  // Povolené tloušťky prken/fošen
+  const candidates = [];
+  if (hasTram)   TRAM_SIZES.forEach(s  => candidates.push({w:s,   h:s,   area:s*s,     type:'tram',   name:`Trám ${s}×${s} cm`}));
+  if (hasHranol) HRANOL_SIZES.forEach(b => candidates.push({w:b.w, h:b.h, area:b.w*b.h, type:'hranol', name:`Hranol ${b.w}×${b.h} cm`}));
+  candidates.sort((a, b) => b.area - a.area);
+
+  for (const c of candidates) {
+    // Centrovaný hranol — limitující roh je na vzdálenosti sqrt((w/2)^2 + (h/2)^2) od středu
+    const halfDiag = Math.sqrt((c.w/2)**2 + (c.h/2)**2);
+    if (halfDiag <= rEff) {
+      return { ...c, cantW: Math.max(c.w, c.h), cantH: Math.min(c.w, c.h) };
+    }
+  }
+  return null;
+}
+
+// Rozřeže hranol na prkna/fošny/latě podél jeho výšky
+// cant: { cantW, cantH } — šířka a výška hranolu
+// Vrací pole kusů s { w, h, type, name, phase:'rip' }
+function ripCantIntoProducts(cant, kerfCm) {
+  const hasFosnka = activeTypes.has('fosnka');
+  const hasPrkno  = activeTypes.has('prkno');
+  const hasLat    = activeTypes.has('lat');
+  const ALL_THICKS = [8, 6, 5, 4, 3, 2.5, 2];
+  const LAT_SIZES  = [{w:6,h:4},{w:5,h:5},{w:4,h:6},{w:4,h:4},{w:3,h:5}];
+
   let boardThicks = [];
   if (selectedThickness > 0) {
     boardThicks = [selectedThickness];
@@ -1741,150 +1767,291 @@ function findBestPlan(rEff, kerfCm, priority) {
     if (hasPrkno)  ALL_THICKS.filter(t => t <= 3.5).forEach(t => boardThicks.push(t));
   }
 
-  // ── Najdi nejlepší tloušťku prken pro daný rozsah výšky ──────────────────
-  function bestThickFor(from, to) {
-    if (from - to < 1.5 || boardThicks.length === 0) return null;
-    let best = null, bestArea = 0;
-    for (const t of boardThicks) {
-      if (t > from - to + 0.1) continue;
-      let te = from, area = 0, iters = 0;
-      while (te - t >= to - 0.05 && iters++ < 100) {
-        const cy = te - t / 2;
-        const w = maxWidthAtY(cy, t, rEff);
-        if (w >= MIN_BOARD_WIDTH) { area += w * t; te -= t + kerfCm; }
-        else te -= 0.05;
-      }
-      if (area > bestArea) { bestArea = area; best = t; }
-    }
-    return best;
+  if (boardThicks.length === 0 && !hasLat) return [];
+
+  const cantWidth  = cant.cantW; // šířka prkna = plná šířka hranolu
+  const cantHeight = cant.cantH; // výška hranolu = prostor pro řezy
+
+  // Vyber optimální tloušťku — maximalizuje počet plných kusů
+  let bestThick = null, bestCount = 0;
+  for (const t of boardThicks) {
+    if (t >= cantHeight) continue;
+    const n = Math.floor((cantHeight + kerfCm) / (t + kerfCm));
+    if (n > bestCount) { bestCount = n; bestThick = t; }
   }
 
-  // ── Vyplň rozsah prkny (jedna konzistentní tloušťka) ─────────────────────
-  function fillBoards(from, to, pieces, areaRef) {
-    if (!wantsBoard || from - to < 1.5) return;
-    const t = bestThickFor(from, to);
-    if (!t) return;
-    const type  = t > 3.5 ? 'fosnka' : 'prkno';
-    const label = t > 3.5 ? 'Fošna'  : 'Prkno';
-    let te = from, nofit = 0;
-    while (nofit < 30) {
-      const bot = te - t;
-      if (bot < to - 0.05) break;
-      const cy = (te + bot) / 2;
-      const w = maxWidthAtY(cy, t, rEff);
-      if (w >= MIN_BOARD_WIDTH) {
-        pieces.push({ w, h:t, x:0, y:cy, name:`${label} ${w}×${Math.round(t*10)} mm`, type, label: cy>=0?'nahoře':'dole' });
-        areaRef.v += w * t;
-        te = bot - kerfCm;
-        nofit = 0;
-      } else { te -= 0.05; nofit++; }
+  const products = [];
+  let remaining = cantHeight;
+  let yPos = cant.cantH / 2; // začínáme od vrchu hranolu
+
+  if (bestThick && bestCount > 0) {
+    const type  = bestThick > 3.5 ? 'fosnka' : 'prkno';
+    const label = bestThick > 3.5 ? 'Fošna'  : 'Prkno';
+    for (let i = 0; i < bestCount && remaining >= bestThick - 0.05; i++) {
+      yPos -= bestThick / 2;
+      products.push({
+        w: cantWidth, h: bestThick,
+        x: 0, y: yPos,
+        name: `${label} ${cantWidth}×${Math.round(bestThick*10)} mm`,
+        type, phase: 'rip', label: 'hranol'
+      });
+      yPos -= bestThick / 2 + kerfCm;
+      remaining -= bestThick + kerfCm;
     }
-    // Latě ze zbytku
+  }
+
+  // Latě ze zbytku výšky hranolu
+  if (hasLat && remaining >= 3) {
+    for (const ls of LAT_SIZES) {
+      if (ls.h <= remaining + 0.05 && ls.w <= cantWidth) {
+        const n = Math.floor((remaining + kerfCm) / (ls.h + kerfCm));
+        for (let i = 0; i < n; i++) {
+          yPos -= ls.h / 2;
+          products.push({
+            w: ls.w, h: ls.h,
+            x: 0, y: yPos,
+            name: `Lať ${ls.w}×${ls.h} cm`,
+            type: 'lat', phase: 'rip', label: 'hranol'
+          });
+          yPos -= ls.h / 2 + kerfCm;
+        }
+        break;
+      }
+    }
+  }
+
+  return products;
+}
+
+// Boční slabiny — co lze vyřezat z klínů po stranách hranolu
+// Vrací pole kusů s phase:'side'
+function recoverSideBoards(cant, rEff, kerfCm) {
+  const hasFosnka = activeTypes.has('fosnka');
+  const hasPrkno  = activeTypes.has('prkno');
+  const hasLat    = activeTypes.has('lat');
+  if (!hasFosnka && !hasPrkno && !hasLat) return [];
+
+  const ALL_THICKS = [8, 6, 5, 4, 3, 2.5, 2];
+  let boardThicks = [];
+  if (selectedThickness > 0) {
+    boardThicks = [selectedThickness];
+  } else {
+    if (hasFosnka) ALL_THICKS.filter(t => t > 3.5).forEach(t => boardThicks.push(t));
+    if (hasPrkno)  ALL_THICKS.filter(t => t <= 3.5).forEach(t => boardThicks.push(t));
+  }
+  if (boardThicks.length === 0) return [];
+
+  // Na každé straně je klín: výška = cant.cantH, šířka na místě y = maxWidthAtY(y, cantH, rEff)/2 - cantW/2
+  const cantHalfW = cant.cantW / 2;
+  const cantHalfH = cant.cantH / 2;
+  const products = [];
+
+  // Pro každou tloušťku prkna projdi výšku hranolu vodorovnými řezy
+  // Šířka dostupná v daném sloji y = maxWidthAtY(y, t, rEff) - cantW (celkem oba boky)
+  // Jeden bok = polovina z toho
+  let bestThick = null, bestSideArea = 0;
+  for (const t of boardThicks) {
+    let te = cantHalfH, area = 0, iters = 0;
+    while (te - t >= -cantHalfH + 0.05 && iters++ < 80) {
+      const cy = te - t/2;
+      const fullW = maxWidthAtY(cy, t, rEff);
+      const sideW = Math.floor((fullW - cant.cantW) / 2);
+      if (sideW >= MIN_BOARD_WIDTH) { area += sideW * t * 2; te -= t + kerfCm; }
+      else te -= 0.05;
+    }
+    if (area > bestSideArea) { bestSideArea = area; bestThick = t; }
+  }
+
+  if (!bestThick) return [];
+
+  const type  = bestThick > 3.5 ? 'fosnka' : 'prkno';
+  const label = bestThick > 3.5 ? 'Fošna'  : 'Prkno';
+  let te = cantHalfH, nofit = 0;
+  while (nofit < 20) {
+    const bot = te - bestThick;
+    if (bot < -cantHalfH - 0.05) break;
+    const cy = (te + bot) / 2;
+    const fullW = maxWidthAtY(cy, bestThick, rEff);
+    const sideW = Math.floor((fullW - cant.cantW) / 2);
+    if (sideW >= MIN_BOARD_WIDTH) {
+      // Levý bok
+      products.push({ w:sideW, h:bestThick, x:-(cant.cantW/2 + sideW/2), y:cy,
+        name:`${label} ${sideW}×${Math.round(bestThick*10)} mm`, type, phase:'side', label:'bok' });
+      // Pravý bok (zrcadlově)
+      products.push({ w:sideW, h:bestThick, x:(cant.cantW/2 + sideW/2), y:cy,
+        name:`${label} ${sideW}×${Math.round(bestThick*10)} mm`, type, phase:'side', label:'bok' });
+      te = bot - kerfCm; nofit = 0;
+    } else { te -= 0.05; nofit++; }
+  }
+  return products;
+}
+
+// Hlavní funkce — sestaví kompletní plán
+function findBestPlan(rEff, kerfCm, _priority) {
+  const hasTram   = activeTypes.has('tram');
+  const hasHranol = activeTypes.has('hranol');
+  const hasFosnka = activeTypes.has('fosnka');
+  const hasPrkno  = activeTypes.has('prkno');
+  const hasLat    = activeTypes.has('lat');
+  const wantsBeam  = hasTram || hasHranol;
+  const wantsBoard = hasFosnka || hasPrkno || hasLat;
+
+  if (!wantsBeam && !wantsBoard) return null;
+  if (!wantsBeam) return findBestPlanBoardsOnly(rEff, kerfCm);
+
+  const cant = findBestCant(rEff);
+  if (!cant) return wantsBoard ? findBestPlanBoardsOnly(rEff, kerfCm) : null;
+
+  const pieces = [];
+  let totalArea = 0;
+
+  // 1. Hlavní hranol
+  cant.x = 0; cant.y = 0; cant.phase = 'cant'; cant.label = 'střed';
+  pieces.push(cant);
+
+  // 2. Rozřezání hranolu na prkna/fošny/latě
+  if (wantsBoard) {
+    const ripped = ripCantIntoProducts(cant, kerfCm);
+    ripped.forEach(p => pieces.push(p));
+  }
+
+  // Výtěžnost: prkna z hranolu + boční, hranol jen pokud žádná prkna
+  const ripPieces = pieces.filter(p => p.phase === 'rip');
+  const cantAlone = ripPieces.length === 0;
+  pieces.forEach(p => {
+    if (p.phase === 'cant' && !cantAlone) return;
+    totalArea += p.w * p.h;
+  });
+
+  // 3. Boční klíny
+  if (wantsBoard) {
+    const side = recoverSideBoards(cant, rEff, kerfCm);
+    side.forEach(p => { pieces.push(p); totalArea += p.w * p.h; });
+  }
+
+  return pieces.length ? { pieces, totalArea, cant: pieces[0] } : null;
+}
+
+// Fallback: jen prkna bez trámu (celý průřez)
+function findBestPlanBoardsOnly(rEff, kerfCm) {
+  const hasFosnka = activeTypes.has('fosnka');
+  const hasPrkno  = activeTypes.has('prkno');
+  const hasLat    = activeTypes.has('lat');
+  const ALL_THICKS = [8, 6, 5, 4, 3, 2.5, 2];
+  const LAT_SIZES  = [{w:6,h:4},{w:5,h:5},{w:4,h:6},{w:4,h:4},{w:3,h:5}];
+
+  let boardThicks = [];
+  if (selectedThickness > 0) boardThicks = [selectedThickness];
+  else {
+    if (hasFosnka) ALL_THICKS.filter(t => t > 3.5).forEach(t => boardThicks.push(t));
+    if (hasPrkno)  ALL_THICKS.filter(t => t <= 3.5).forEach(t => boardThicks.push(t));
+  }
+
+  // Vyber tloušťku maximalizující plochu — symetricky od středu
+  let bestThick = null, bestArea = 0;
+  for (const t of boardThicks) {
+    let area = 0;
+    // Střední prkno (pokud se vejde)
+    let offset = t / 2;
+    if (offset + t / 2 <= rEff) {
+      // Symetrické páry od středu ven
+      // offset = vzdálenost středu prkna od středu klády
+      let off = 0;
+      // Sudý počet: první prkno na +t/2+kerfCm/2, druhé na -(t/2+kerfCm/2)...
+      // Lichý počet: první na 0, pak páry
+      // Zkusíme oba případy a vezmeme lepší
+      for (const startOdd of [true, false]) {
+        let a = 0, y = startOdd ? 0 : t / 2 + kerfCm / 2;
+        const positions = [];
+        if (startOdd) { positions.push(0); y = t + kerfCm; }
+        else y = t / 2 + kerfCm / 2;
+        while (y + t / 2 <= rEff + 0.05) {
+          positions.push(y); positions.push(-y); y += t + kerfCm;
+        }
+        for (const cy of positions) {
+          const w = maxWidthAtY(cy, t, rEff);
+          if (w >= MIN_BOARD_WIDTH) a += w * t;
+        }
+        if (a > area) area = a;
+      }
+    }
+    if (area > bestArea) { bestArea = area; bestThick = t; }
+  }
+
+  if (!bestThick) {
+    // Fallback latě
+    const pieces = []; let totalArea = 0;
     if (hasLat) {
-      let noFitL = 0;
-      while (noFitL < 10) {
+      let te = rEff - 0.01, nofit = 0;
+      while (nofit < 20) {
         let placed = false;
         for (const ls of LAT_SIZES) {
           const bot = te - ls.h;
-          if (bot < to - 0.05) continue;
-          const cy = (te + bot) / 2;
-          const w = maxWidthAtY(cy, ls.h, rEff);
-          if (w >= ls.w) {
-            pieces.push({ w:ls.w, h:ls.h, x:0, y:cy, name:`Lať ${ls.w}×${ls.h} cm`, type:'lat', label: cy>=0?'nahoře':'dole' });
-            areaRef.v += ls.w * ls.h;
-            te = bot - kerfCm;
-            placed = true; break;
+          if (bot < -rEff + 0.05) continue;
+          const cy = (te+bot)/2;
+          if (maxWidthAtY(cy, ls.h, rEff) >= ls.w) {
+            pieces.push({w:ls.w,h:ls.h,x:0,y:cy,name:`Lať ${ls.w}×${ls.h} cm`,type:'lat',phase:'rip',label:cy>=0?'nahoře':'dole'});
+            totalArea += ls.w * ls.h; te = bot - kerfCm; placed = true; break;
           }
         }
-        if (!placed) { te -= 0.05; noFitL++; }
-        if (te < to) break;
+        if (!placed) { te -= 0.05; nofit++; }
+        if (te < -rEff + 0.05) break;
       }
     }
+    return pieces.length ? {pieces, totalArea, cant:null} : null;
   }
 
-  // ── Najdi největší trám/hranol který se vejde — centrovaně ───────────────
-  function findBestBeam() {
-    // Seřaď od největšího
-    const candidates = [];
-    if (hasTram)   TRAM_SIZES.forEach(s => candidates.push({w:s, h:s, area:s*s, type:'tram', name:`Trám ${s}×${s} cm`}));
-    if (hasHranol) HRANOL_SIZES.forEach(hs => candidates.push({w:hs.w, h:hs.h, area:hs.w*hs.h, type:'hranol', name:`Hranol ${hs.w}×${hs.h} cm`}));
-    candidates.sort((a, b) => b.area - a.area);
+  // Vygeneruj symetrické páry prken od středu ven
+  const type  = bestThick > 3.5 ? 'fosnka' : 'prkno';
+  const label = bestThick > 3.5 ? 'Fošna'  : 'Prkno';
+  const pieces = []; let totalArea = 0;
 
-    for (const b of candidates) {
-      // Zkus centrovaně (nejlepší pozice)
-      const cy = 0;
-      const w = maxWidthAtY(cy, b.h, rEff);
-      if (w >= b.w) {
-        return { ...b, cy, topEdge: b.h/2, botEdge: -b.h/2 };
+  // Zkus lichý (střed + páry) vs sudý (jen páry) — vezmi ten s větší plochou
+  let bestPieces = [], bestPiecesArea = 0;
+  for (const startOdd of [true, false]) {
+    const trial = [];
+    let trialArea = 0;
+    const positions = [];
+    if (startOdd) {
+      positions.push(0);
+      let y = bestThick + kerfCm;
+      while (y + bestThick / 2 <= rEff + 0.05) { positions.push(y); positions.push(-y); y += bestThick + kerfCm; }
+    } else {
+      let y = bestThick / 2 + kerfCm / 2;
+      while (y + bestThick / 2 <= rEff + 0.05) { positions.push(y); positions.push(-y); y += bestThick + kerfCm; }
+    }
+    // Seřaď od vrchu dolů pro hezké zobrazení
+    positions.sort((a, b) => b - a);
+    for (const cy of positions) {
+      const w = maxWidthAtY(cy, bestThick, rEff);
+      if (w >= MIN_BOARD_WIDTH) {
+        trial.push({ w, h:bestThick, x:0, y:cy,
+          name:`${label} ${w}×${Math.round(bestThick*10)} mm`, type, phase:'rip',
+          label: cy >= 0 ? 'nahoře' : 'dole' });
+        trialArea += w * bestThick;
       }
     }
-    return null;
+    if (trialArea > bestPiecesArea) { bestPiecesArea = trialArea; bestPieces = trial; }
   }
 
-  // ── Jen prkna (bez trámu) ────────────────────────────────────────────────
-  if (!wantsBeam && !hasLat) {
-    if (!wantsBoard) return null;
-    const pieces = []; const areaRef = {v:0};
-    fillBoards(rEff - 0.01, -rEff + 0.5, pieces, areaRef);
-    return pieces.length ? {pieces, totalArea: areaRef.v} : null;
-  }
-
-  // ── Jen latě ────────────────────────────────────────────────────────────
-  if (!wantsBeam && !wantsBoard && hasLat) {
-    const pieces = []; const areaRef = {v:0};
-    let te = rEff - 0.01, noFit = 0;
-    while (noFit < 20) {
-      let placed = false;
-      for (const ls of LAT_SIZES) {
-        const bot = te - ls.h;
-        if (bot < -rEff + 0.5) continue;
-        const cy = (te+bot)/2;
-        const w = maxWidthAtY(cy, ls.h, rEff);
-        if (w >= ls.w) {
-          pieces.push({w:ls.w,h:ls.h,x:0,y:cy,name:`Lať ${ls.w}×${ls.h} cm`,type:'lat',label:cy>=0?'nahoře':'dole'});
-          areaRef.v += ls.w * ls.h;
-          te = bot - kerfCm; placed = true; break;
-        }
-      }
-      if (!placed) { te -= 0.05; noFit++; }
-      if (te < -rEff + 0.5) break;
-    }
-    return pieces.length ? {pieces, totalArea: areaRef.v} : null;
-  }
-
-  // ── Trám + prkna ─────────────────────────────────────────────────────────
-  const beam = findBestBeam();
-  const pieces = []; const areaRef = {v:0};
-
-  if (beam) {
-    pieces.push({ w:beam.w, h:beam.h, x:0, y:beam.cy, name:beam.name, type:beam.type, label:'střed' });
-    areaRef.v += beam.area;
-    if (wantsBoard) {
-      fillBoards(rEff - 0.01, beam.topEdge + kerfCm, pieces, areaRef);
-      fillBoards(beam.botEdge - kerfCm, -rEff + 0.5, pieces, areaRef);
-    }
-  } else if (wantsBoard) {
-    fillBoards(rEff - 0.01, -rEff + 0.5, pieces, areaRef);
-  }
-
-  return pieces.length ? {pieces, totalArea: areaRef.v} : null;
+  bestPieces.forEach(p => { pieces.push(p); totalArea += p.w * p.h; });
+  return pieces.length ? {pieces, totalArea, cant:null} : null;
 }
 
 // ─── MAIN CALCULATE ──────────────────────────────────────────────────────────
 function calculate() {
   const dStart = parseFloat(document.getElementById('dStart').value);
-  const dMid   = parseFloat(document.getElementById('dMid').value);
-  const dEnd   = parseFloat(document.getElementById('dEnd').value);
+  const dMid   = parseFloat(document.getElementById('dMid').value) || 0;
+  const dEnd   = parseFloat(document.getElementById('dEnd').value) || 0;
   const length = parseFloat(document.getElementById('length').value);
   const kerf   = parseFloat(document.getElementById('kerf').value) || 3;
-  const priority = document.getElementById('priority').value;
 
-  if (!dStart || !dEnd || !length) {
-    alert('Vyplňte průměry a délku kulatiny.');
+  if (!dStart || !length) {
+    alert('Vyplňte alespoň průměr (začátek) a délku kulatiny.');
     return;
   }
 
-  const dMin = Math.min(dStart, dMid || dStart, dEnd);
+  const dMin = Math.min(dStart, dMid || dStart, dEnd || dStart);
   const rRaw = dMin / 2;
   const BARK = barkMode ? (SPECIES[selectedSpecies]?.bark || 1.0) : 0;
   const rEff = rRaw - BARK;
@@ -1913,7 +2080,7 @@ function calculate() {
   document.getElementById('offcutsGrid').innerHTML = '';
   document.getElementById('offcutsSvg').innerHTML = '';
 
-  const plan = findBestPlan(rEff, kerf / 10, priority);
+  const plan = findBestPlan(rEff, kerf / 10, null);
 
   // Show results
   document.getElementById('emptyState').style.display = 'none';
@@ -1936,8 +2103,16 @@ function calculate() {
   const scale = (SVG_SIZE * 0.42) / rEff;
   const cx = SVG_SIZE / 2, cy = SVG_SIZE / 2;
 
-  const pieceColors = { tram: '#8B5E3C', hranol: '#7a6040', fosnka: '#a07040', prkno: '#c49060', lat: '#6a8060', custom: '#909080' };
-  const pieceStroke = { tram: '#c4936a', hranol: '#b08050', fosnka: '#d0a070', prkno: '#e0b080', lat: '#90b080', custom: '#b0b090' };
+  const pieceColors = {
+    tram:   '#6B3F1E', hranol: '#5a3a18',
+    fosnka: '#9a6830', prkno:  '#c49060',
+    lat:    '#6a8060', custom: '#909080'
+  };
+  const pieceStroke = {
+    tram:   '#c4936a', hranol: '#a07040',
+    fosnka: '#d4a870', prkno:  '#e0c090',
+    lat:    '#90b080', custom: '#b0b090'
+  };
 
   let svgPieces = '';
   for (const piece of plan.pieces) {
@@ -1947,42 +2122,55 @@ function calculate() {
     const ph = piece.h * scale;
     const col = pieceColors[piece.type] || '#8B5E3C';
     const str = pieceStroke[piece.type] || '#c4936a';
+    const isCant = piece.phase === 'cant';
+    const isSide = piece.phase === 'side';
 
     // Wood grain lines
     let grainLines = '';
     for (let g = 4; g < pw; g += 8) {
-      grainLines += `<line x1="${px + g}" y1="${py + 2}" x2="${px + g}" y2="${py + ph - 2}" stroke="${str}" stroke-width="0.5" opacity="0.3"/>`;
+      grainLines += `<line x1="${px+g}" y1="${py+2}" x2="${px+g}" y2="${py+ph-2}" stroke="${str}" stroke-width="0.5" opacity="0.25"/>`;
     }
 
+    // Cant má silnější border, side boards jsou mírně průhledné
+    const opacity  = isSide ? '0.65' : '1';
+    const sw       = isCant ? '2.5'  : '1.2';
+    const fillCol  = isCant ? col    : (isSide ? col + 'aa' : col);
+    const dash     = isSide ? 'stroke-dasharray="3,2"' : '';
+
     svgPieces += `
-      <rect x="${px}" y="${py}" width="${pw}" height="${ph}" fill="${col}" stroke="${str}" stroke-width="1.5" rx="1"/>
+      <rect x="${px}" y="${py}" width="${pw}" height="${ph}" fill="${fillCol}" stroke="${str}" stroke-width="${sw}" rx="1" opacity="${opacity}" ${dash}/>
       ${grainLines}
-      <text x="${px + pw/2}" y="${py + ph/2 + 4}" text-anchor="middle" fill="#fff" font-size="${Math.max(7, Math.min(11, pw/piece.name.length*1.2))}" font-family="IBM Plex Mono,monospace" opacity="0.85">${piece.w}×${piece.h}</text>
+      <text x="${px+pw/2}" y="${py+ph/2+4}" text-anchor="middle" fill="#fff"
+        font-size="${Math.max(7, Math.min(10, pw/6))}"
+        font-family="IBM Plex Mono,monospace" opacity="0.9">${piece.w}×${piece.h}</text>
     `;
   }
 
-  // Cut lines (horizontal)
+  // Přerušovací čáry řezů — jen pro rip fázi
   let cutLines = '';
-  const cuts = getCuts(plan.pieces, cx, cy, scale);
+  const cuts = getCuts(plan.pieces.filter(p => p.phase === 'rip' || p.phase === 'cant'), cx, cy, scale);
   for (const cut of cuts) {
-    cutLines += `<line x1="${cx - rEff * scale - 8}" y1="${cut}" x2="${cx + rEff * scale + 8}" y2="${cut}" stroke="#ff6b35" stroke-width="1" stroke-dasharray="4,3" opacity="0.7"/>`;
+    cutLines += `<line x1="${cx - rEff*scale - 10}" y1="${cut}" x2="${cx + rEff*scale + 10}" y2="${cut}" stroke="#ff6b35" stroke-width="0.8" stroke-dasharray="4,3" opacity="0.6"/>`;
   }
+
+  // Fázové legendy
+  const cantPiece = plan.pieces.find(p => p.phase === 'cant');
+  const hasSide   = plan.pieces.some(p  => p.phase === 'side');
+  let legendItems = '';
+  if (cantPiece) legendItems += `<text x="8" y="14" fill="#c4936a" font-size="9" font-family="IBM Plex Mono,monospace">■ hranol</text>`;
+  legendItems += `<text x="8" y="26" fill="#e0c090" font-size="9" font-family="IBM Plex Mono,monospace">■ řezivo</text>`;
+  if (hasSide)  legendItems += `<text x="8" y="38" fill="#d4a87088" font-size="9" font-family="IBM Plex Mono,monospace">⬚ bok</text>`;
 
   const svgMarkup = `
   <svg width="${SVG_SIZE}" height="${SVG_SIZE}" viewBox="0 0 ${SVG_SIZE} ${SVG_SIZE}">
-    <!-- Background -->
     <rect width="${SVG_SIZE}" height="${SVG_SIZE}" fill="#0f0e0c"/>
-    <!-- Log circle (bark) -->
-    <circle cx="${cx}" cy="${cy}" r="${rRaw * scale}" fill="#3d2810" stroke="#5a3a1a" stroke-width="2"/>
-    <!-- Effective circle (without bark) -->
+    <circle cx="${cx}" cy="${cy}" r="${rRaw * scale}" fill="#2d1a08" stroke="#5a3a1a" stroke-width="2"/>
     <circle cx="${cx}" cy="${cy}" r="${rEff * scale}" fill="#1a0f05" stroke="#6a4020" stroke-width="1" stroke-dasharray="4,3"/>
-    <!-- Pieces -->
     ${svgPieces}
-    <!-- Cut lines -->
     ${cutLines}
-    <!-- Diameter label -->
-    <line x1="${cx - rEff*scale}" y1="${cy + rEff*scale + 14}" x2="${cx + rEff*scale}" y2="${cy + rEff*scale + 14}" stroke="#d4a843" stroke-width="1"/>
-    <text x="${cx}" y="${cy + rEff*scale + 26}" text-anchor="middle" fill="#d4a843" font-size="10" font-family="IBM Plex Mono,monospace">⌀ ${dMin} cm (kritické místo)</text>
+    ${legendItems}
+    <line x1="${cx-rEff*scale}" y1="${cy+rEff*scale+14}" x2="${cx+rEff*scale}" y2="${cy+rEff*scale+14}" stroke="#d4a843" stroke-width="1"/>
+    <text x="${cx}" y="${cy+rEff*scale+26}" text-anchor="middle" fill="#d4a843" font-size="10" font-family="IBM Plex Mono,monospace">⌀ ${dMin} cm (kritické místo)</text>
   </svg>`;
 
   document.getElementById('svgWrap').innerHTML = svgMarkup;
@@ -1990,23 +2178,37 @@ function calculate() {
   // ── OUTPUT PRODUCTS LIST ──────────────────────────────────────────────────
   const counts = {};
   for (const p of plan.pieces) {
-    const key = `${p.type}|${p.w}×${p.h}`;
+    const key = `${p.phase}|${p.type}|${p.w}×${p.h}`;
     if (!counts[key]) counts[key] = { ...p, count: 0 };
     counts[key].count++;
   }
 
+  const phaseLabel = { cant:'HRANOL', rip:'ŘEZIVO', side:'BOK' };
+  const typeLabel  = { tram:'TRÁM', hranol:'HRANOL', prkno:'PRKNO', fosnka:'FOŠNA', lat:'LAŤ', custom:'VLASTNÍ' };
+
+  // Seřaď: cant první, pak rip, pak side
+  const phaseOrder = { cant:0, rip:1, side:2 };
+  const sortedItems = Object.values(counts).sort((a,b) => (phaseOrder[a.phase]||1) - (phaseOrder[b.phase]||1));
+
+  let lastPhase = null;
   let gridHTML = '';
-  for (const item of Object.values(counts)) {
-    const typeName = { tram: 'TRÁM', hranol: 'HRANOL', prkno: 'PRKNO', fosnka: 'FOŠNA', lat: 'LAŤ', custom: 'VLASTNÍ' }[item.type] || 'KUS';
+  for (const item of sortedItems) {
+    if (item.phase !== lastPhase) {
+      const ph = item.phase;
+      const headers = { cant:'// Hlavní hranol', rip:'// Řezivo z hranolu', side:'// Boční klíny (vedlejší)' };
+      gridHTML += `<div style="grid-column:1/-1;font-family:'IBM Plex Mono',monospace;font-size:0.7rem;color:var(--muted);margin-top:${lastPhase?'12px':'0'};padding-top:${lastPhase?'8px':'0'};border-top:${lastPhase?'1px solid #2a2518':'none'}">${headers[ph]||''}</div>`;
+      lastPhase = ph;
+    }
     const lengthM = (length / 100).toFixed(2);
+    const sideNote = item.phase === 'side' ? `<div class="info-tag" style="color:#a07040">vedlejší</div>` : '';
     gridHTML += `
       <div class="output-item">
         <div class="qty">${item.count}×</div>
-        <div class="type">${typeName}</div>
+        <div class="type">${typeLabel[item.type] || 'KUS'}</div>
         <div class="dims">${item.w} × ${item.h} cm</div>
         <div class="info-tag">dl. ${lengthM} m</div>
-      </div>
-    `;
+        ${sideNote}
+      </div>`;
   }
   document.getElementById('outputGrid').innerHTML = gridHTML;
 
@@ -2378,106 +2580,6 @@ const SPECIES = {
     vady: 'Malá pevnost, rychlé hnití v exteriéru', price_m3: '800–1 500 Kč/m³',
   },
 };
-  borovice: {
-    name: 'Borovice lesní',
-    density: 520,
-    hardness: 'Měkké',
-    difficulty: 1.1,
-    moisture_ideal: '18–25 %',
-    best_for: 'Trámy, prkna, podlahy, okna, nábytek',
-    notes: 'Pryskyřičnatější než smrk — pila se rychleji zanáší. Odolnější vůči vlhkosti.',
-    vady: 'Pryskyřičné kapsy, velké suky, točivost vláken',
-    price_m3: '2 000–3 200 Kč/m³',
-  },
-  modrin: {
-    name: 'Modřín opadavý',
-    density: 590,
-    hardness: 'Střední',
-    difficulty: 1.2,
-    moisture_ideal: '15–20 %',
-    best_for: 'Terasy, fasády, okna, lodní paluba, mosty',
-    notes: 'Přirozeně odolný proti hnilobě. Vhodný do exteriéru bez impregnace. Hůře se řeže než smrk.',
-    vady: 'Točivost vláken, rychlé otupování listů',
-    price_m3: '2 500–4 000 Kč/m³',
-  },
-  dub: {
-    name: 'Dub letní/zimní',
-    density: 720,
-    hardness: 'Tvrdé',
-    difficulty: 1.8,
-    moisture_ideal: '15–20 %',
-    best_for: 'Podlahy, nábytek, sudy, trámy, schodiště',
-    notes: 'Prémiové dřevo. Řezání trvá 2× déle než jehličnany. Rychle otupuje pásy pily — počítejte s více výměnami.',
-    vady: 'Trhliny při rychlém sušení, třísloviny barví kovové spoje',
-    price_m3: '4 000–8 000 Kč/m³',
-  },
-  buk: {
-    name: 'Buk lesní',
-    density: 720,
-    hardness: 'Tvrdé',
-    difficulty: 1.7,
-    moisture_ideal: '12–18 %',
-    best_for: 'Nábytek, podlahy, schody, hračky, nářadí',
-    notes: 'Musí se rychle sušit — náchylné k trhání. Nelze použít v exteriéru. Homogenní struktura — krásně opracovatelné.',
-    vady: 'Náchylné k trhání při sušení, červenání jádra',
-    price_m3: '3 500–6 000 Kč/m³',
-  },
-  habr: {
-    name: 'Habr obecný',
-    density: 830,
-    hardness: 'Velmi tvrdé',
-    difficulty: 2.2,
-    moisture_ideal: '12–15 %',
-    best_for: 'Nástroje, ozubená kola, parkety, řezbářství',
-    notes: 'Nejtěžší domácí dřevo. Velmi náročné na pilu — krátké pásy, pomalý posuv. Speciální použití.',
-    vady: 'Točivá vlákna, obtížné sušení',
-    price_m3: '5 000–9 000 Kč/m³',
-  },
-  javor: {
-    name: 'Javor klen/mléč',
-    density: 650,
-    hardness: 'Tvrdé',
-    difficulty: 1.6,
-    moisture_ideal: '12–18 %',
-    best_for: 'Hudební nástroje, nábytek, podlahy, kuchyňské desky',
-    notes: 'Krásná světlá kresba. Řeže se dobře ale pomaleji než jehličnany. Cenné dřevo.',
-    vady: 'Zbarvení při oxidaci, náchylné k houbám při vlhkosti',
-    price_m3: '4 000–7 000 Kč/m³',
-  },
-  jasan: {
-    name: 'Jasan ztepilý',
-    density: 690,
-    hardness: 'Tvrdé / pružné',
-    difficulty: 1.6,
-    moisture_ideal: '12–18 %',
-    best_for: 'Nábytek, sportovní náčiní, rukojeti, schodiště',
-    notes: 'Velmi pružné — oblíbené na sportovní náčiní. Ohrožen jasanovou chřadnutím (Hymenoscyphus). Zkontrolujte zdraví stromu.',
-    vady: 'Jasanová chřadnutí, nestabilita při vlhkostních změnách',
-    price_m3: '3 500–6 500 Kč/m³',
-  },
-  bříza: {
-    name: 'Bříza bělokorá',
-    density: 620,
-    hardness: 'Středně tvrdé',
-    difficulty: 1.4,
-    moisture_ideal: '15–20 %',
-    best_for: 'Překližka, nábytek, dřevěné obaly, hračky',
-    notes: 'Rychle roste, levná. Nestabilní při vlhkosti — méně vhodná pro konstrukční účely. Krásná bílá kůra.',
-    vady: 'Velká sesychavost, náchylné k hnilobě v exteriéru',
-    price_m3: '1 500–2 500 Kč/m³',
-  },
-  osika: {
-    name: 'Osika / Topol',
-    density: 450,
-    hardness: 'Měkké / lehké',
-    difficulty: 0.9,
-    moisture_ideal: '20–30 %',
-    best_for: 'Zápalky, překližka, papír, palety, bedny',
-    notes: 'Nejlehčí domácí dřevo. Snadno se řeže. Nízká hodnota pro konstrukční použití.',
-    vady: 'Malá pevnost, rychlé hnití v exteriéru',
-    price_m3: '800–1 500 Kč/m³',
-  },
-};
 
 let selectedSpecies = 'smrk';
 
@@ -2507,6 +2609,28 @@ function showSpeciesInfo(sp) {
 
 // Show default species info on load
 showSpeciesInfo('smrk');
+
+// ── INICIALIZACE PŘI NAČTENÍ ─────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  // Nastav aktivní stav karet sortimentů dle activeTypes
+  document.querySelectorAll('.sort-card').forEach(card => {
+    const type = card.dataset.type;
+    if (activeTypes.has(type)) card.classList.add('active');
+    else card.classList.remove('active');
+  });
+
+  // Nastav aktivní tlačítko tloušťky
+  document.querySelectorAll('.thick-btn').forEach(btn => {
+    btn.classList.toggle('active', parseFloat(btn.dataset.t) === selectedThickness);
+  });
+
+  // Nastav přepínač kůry
+  setBarkMode(true);
+
+  // Nastav datum v zakázkách na dnešek
+  const datumEl = document.getElementById('zDatum');
+  if (datumEl) datumEl.value = new Date().toISOString().split('T')[0];
+});
 
 // ─── PRICE CALCULATOR ────────────────────────────────────────────────────────
 function calcPrice() {
