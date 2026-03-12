@@ -756,9 +756,10 @@
     background: var(--surface);
     border: 2px solid #5a8a4a;
     padding: 12px 16px;
-    display: flex;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: 1fr auto;
     align-items: center;
+    gap: 4px 12px;
     margin-top: 4px;
   }
 
@@ -766,15 +767,16 @@
     font-family: 'IBM Plex Mono', monospace;
     font-size: 0.75rem;
     color: var(--muted);
-    letter-spacing: 2px;
+    letter-spacing: 1px;
     text-transform: uppercase;
   }
 
   .weight-total .wt-val {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: 1.8rem;
+    font-size: 1.6rem;
     color: #5a8a4a;
     letter-spacing: 2px;
+    text-align: right;
   }
 
   /* SAVE BUTTON */
@@ -2721,24 +2723,34 @@ document.getElementById('length').value = 400;
 // ─── WEIGHT CALCULATION ──────────────────────────────────────────────────────
 function calcWeight(plan, lengthCm, speciesKey) {
   const sp = SPECIES[speciesKey] || SPECIES['smrk'];
-  const density = sp.density; // kg/m³ at ~15% moisture
+  const density = sp.density;
   const lengthM = lengthCm / 100;
 
-  // Count unique pieces
+  // Kubatura klády — Huberova metoda: V = (π/4) × dMid² × L
+  // dMid bereme z aktuálních vstupů
+  const dStartV = parseFloat(document.getElementById('dStart').value) || 0;
+  const dMidV   = parseFloat(document.getElementById('dMid').value)   || dStartV;
+  const dEndV   = parseFloat(document.getElementById('dEnd').value)   || dStartV;
+  const dMidHub = dMidV || ((dStartV + dEndV) / 2); // střední průměr pro Hubera
+  const logVolM3 = (Math.PI / 4) * Math.pow(dMidHub / 100, 2) * lengthM;
+
+  // Kubatura řeziva — součet všech kusů
   const counts = {};
   for (const p of plan.pieces) {
-    const key = `${p.w}x${p.h}`;
-    if (!counts[key]) counts[key] = { w: p.w, h: p.h, count: 0, name: p.name, type: p.type };
+    const key = `${p.phase}|${p.w}x${p.h}`;
+    if (!counts[key]) counts[key] = { w:p.w, h:p.h, count:0, name:p.name, type:p.type, phase:p.phase };
     counts[key].count++;
   }
 
   let totalKg = 0;
+  let totalLumberM3 = 0;
   let html = '';
 
   for (const item of Object.values(counts)) {
     const volumeM3 = (item.w / 100) * (item.h / 100) * lengthM * item.count;
     const kg = volumeM3 * density;
     totalKg += kg;
+    totalLumberM3 += volumeM3;
     html += `
       <div class="weight-item">
         <div class="wi-val">${kg < 10 ? kg.toFixed(1) : Math.round(kg)} kg</div>
@@ -2748,9 +2760,19 @@ function calcWeight(plan, lengthCm, speciesKey) {
   }
 
   document.getElementById('weightGrid').innerHTML = html;
+
+  const yieldRatio = logVolM3 > 0 ? Math.min(99, Math.round(totalLumberM3 / logVolM3 * 100)) : 0;
+
   document.getElementById('weightTotal').innerHTML = `
-    <span class="wt-label">Celková hmotnost</span>
+    <span class="wt-label">Celková hmotnost řeziva</span>
     <span class="wt-val">${totalKg < 100 ? totalKg.toFixed(1) : Math.round(totalKg)} kg</span>
+    <div style="width:100%;height:1px;background:var(--border);margin:10px 0;grid-column:1/-1;"></div>
+    <span class="wt-label" style="color:var(--muted);">Kubatura klády <span style="font-size:0.7rem;opacity:0.6;">(Huber, ⌀střed ${dMidHub} cm)</span></span>
+    <span class="wt-val" style="color:var(--muted);">${logVolM3.toFixed(3)} m³</span>
+    <span class="wt-label" style="color:var(--muted);">Kubatura řeziva</span>
+    <span class="wt-val" style="color:var(--muted);">${totalLumberM3.toFixed(3)} m³</span>
+    <span class="wt-label" style="color:var(--muted);">Výtěžnost kubatury</span>
+    <span class="wt-val" style="color:var(--accent);">${yieldRatio} %</span>
   `;
 
   return totalKg;
