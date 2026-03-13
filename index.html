@@ -1462,82 +1462,99 @@
 <div class="tab-page" id="page-kubatura">
   <div class="tab-page-inner">
     <button class="btn-back" onclick="switchTab('rezny')">← Zpět na řezný plán</button>
-    <div class="section-label">// Kubatura klády — výpočet objemu 📐</div>
+    <div class="section-label">// Kubatura kláд 📐</div>
 
-    <div style="font-family:'IBM Plex Mono',monospace;font-size:0.72rem;color:var(--muted);margin-bottom:16px;line-height:1.6;">
-      Zadej rozměry klády. Kubatura se počítá Huberovou metodou ze středního průměru.<br>
-      Hmotnost je orientační dle hustoty vybrané dřeviny při ~15% vlhkosti.
-    </div>
+    <!-- Formulář pro přidání klády -->
+    <div style="background:var(--surface2);border:1px solid var(--border);padding:14px;margin-bottom:16px;">
 
-    <!-- Vstupy -->
-    <div class="input-row" style="margin-bottom:12px;">
-      <div class="input-group">
-        <label>Průměr — začátek <span class="unit-badge">cm</span></label>
-        <input type="number" id="kb_dStart" placeholder="30" min="5" max="120" step="1" oninput="calcKubatura()">
+      <!-- Přepínač: střed / začátek+konec -->
+      <div style="display:flex;gap:6px;margin-bottom:12px;">
+        <button id="kb_modeSimple" onclick="setKbMode('simple')"
+          style="flex:1;font-family:'IBM Plex Mono',monospace;font-size:0.72rem;padding:7px;border:1px solid var(--accent);background:var(--accent);color:#1a1a14;cursor:pointer;letter-spacing:1px;">
+          JEN STŘED
+        </button>
+        <button id="kb_modeFull" onclick="setKbMode('full')"
+          style="flex:1;font-family:'IBM Plex Mono',monospace;font-size:0.72rem;padding:7px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;letter-spacing:1px;">
+          ZAČÁTEK + KONEC
+        </button>
       </div>
-      <div class="input-group">
-        <label>Průměr — střed <span class="unit-badge">cm</span></label>
-        <input type="number" id="kb_dMid" placeholder="27" min="5" max="120" step="1" oninput="calcKubatura()">
-      </div>
-      <div class="input-group">
-        <label>Průměr — konec <span class="unit-badge">cm</span></label>
-        <input type="number" id="kb_dEnd" placeholder="22" min="5" max="120" step="1" oninput="calcKubatura()">
-      </div>
-    </div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
-      <div class="input-group" style="margin:0;">
-        <label>Délka <span class="unit-badge">cm</span></label>
-        <input type="number" id="kb_length" placeholder="400" min="50" max="2000" step="10" oninput="calcKubatura()">
-      </div>
-      <div class="input-group" style="margin:0;">
-        <label>Počet kusů <span class="unit-badge">ks</span></label>
-        <input type="number" id="kb_count" value="1" min="1" max="999" step="1" oninput="calcKubatura()">
-      </div>
-    </div>
-
-    <!-- Dřevina (kopie z hlavní stránky) -->
-    <div class="section-label" style="margin-bottom:8px;">// Dřevina</div>
-    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:20px;" id="kb_speciesGrid">
-      <!-- generováno JS -->
-    </div>
-
-    <!-- Výsledky -->
-    <div id="kb_results" style="display:none;">
-      <div class="divider"></div>
-
-      <!-- Hlavní čísla -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
-
-        <div style="background:var(--surface);border:1px solid var(--accent);padding:14px 12px;">
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;">Kubatura klády</div>
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;color:var(--accent);letter-spacing:2px;" id="kb_vol">—</div>
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.7rem;color:var(--muted);">m³ / kus</div>
-        </div>
-
-        <div style="background:var(--surface);border:1px solid #5a8a4a;padding:14px 12px;">
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;">Hmotnost klády</div>
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;color:#5a8a4a;letter-spacing:2px;" id="kb_weight">—</div>
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.7rem;color:var(--muted);">kg / kus</div>
+      <!-- Jednoduchý mód: jen střed -->
+      <div id="kb_inputSimple">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div class="input-group" style="margin:0;">
+            <label>Průměr střed <span class="unit-badge">cm</span></label>
+            <input type="number" id="kb_dMid" placeholder="27" min="5" max="120" step="1">
+          </div>
+          <div class="input-group" style="margin:0;">
+            <label>Délka <span class="unit-badge">cm</span></label>
+            <input type="number" id="kb_length" placeholder="400" min="50" max="2000" step="10">
+          </div>
         </div>
       </div>
 
-      <!-- Při více kusech -->
-      <div id="kb_multiRow" style="display:none;display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
-        <div style="background:var(--surface2);border:1px solid var(--border);padding:12px;">
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">Celkem kubatura</div>
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.6rem;color:var(--accent);letter-spacing:2px;" id="kb_volTotal">—</div>
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.7rem;color:var(--muted);">m³ celkem</div>
-        </div>
-        <div style="background:var(--surface2);border:1px solid var(--border);padding:12px;">
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">Celkem hmotnost</div>
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.6rem;color:#5a8a4a;letter-spacing:2px;" id="kb_weightTotal">—</div>
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.7rem;color:var(--muted);">kg celkem</div>
+      <!-- Plný mód: začátek + střed + konec -->
+      <div id="kb_inputFull" style="display:none;">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;">
+          <div class="input-group" style="margin:0;">
+            <label>Začátek <span class="unit-badge">cm</span></label>
+            <input type="number" id="kb_dStart" placeholder="30" min="5" max="120" step="1">
+          </div>
+          <div class="input-group" style="margin:0;">
+            <label>Střed <span class="unit-badge">cm</span></label>
+            <input type="number" id="kb_dMid2" placeholder="27" min="5" max="120" step="1">
+          </div>
+          <div class="input-group" style="margin:0;">
+            <label>Konec <span class="unit-badge">cm</span></label>
+            <input type="number" id="kb_dEnd" placeholder="22" min="5" max="120" step="1">
+          </div>
+          <div class="input-group" style="margin:0;">
+            <label>Délka <span class="unit-badge">cm</span></label>
+            <input type="number" id="kb_length2" placeholder="400" min="50" max="2000" step="10">
+          </div>
         </div>
       </div>
 
-      <!-- Detail výpočtu -->
-      <div style="background:var(--surface2);border:1px solid var(--border);padding:12px;font-family:'IBM Plex Mono',monospace;font-size:0.72rem;color:var(--muted);line-height:1.9;" id="kb_detail"></div>
+      <button onclick="addKlada()"
+        style="width:100%;margin-top:12px;padding:10px;font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:3px;background:var(--accent);color:#1a1a14;border:none;cursor:pointer;">
+        + PŘIDAT KLÁDU
+      </button>
+    </div>
+
+    <!-- Tabulka kláд -->
+    <div id="kb_table" style="display:none;">
+      <div style="display:grid;grid-template-columns:28px 1fr 60px 70px 70px 28px;gap:2px;margin-bottom:4px;font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:var(--muted);letter-spacing:1px;padding:0 4px;">
+        <span>#</span><span>PRŮMĚR(Y) / DÉLKA</span><span style="text-align:right;">m³</span><span style="text-align:right;">kg</span><span style="text-align:right;">dm³</span><span></span>
+      </div>
+      <div id="kb_rows"></div>
+
+      <!-- Součet -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
+        <div style="background:var(--surface);border:1px solid var(--accent);padding:12px 14px;">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:2px;">Celkem kubatura</div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;color:var(--accent);letter-spacing:2px;" id="kb_totalVol">0.000 m³</div>
+        </div>
+        <div style="background:var(--surface);border:1px solid #5a8a4a;padding:12px 14px;">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:2px;">Celkem hmotnost</div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;color:#5a8a4a;letter-spacing:2px;" id="kb_totalKg">0 kg</div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
+        <button onclick="propsatDoZakazky()"
+          style="padding:9px;font-family:'IBM Plex Mono',monospace;font-size:0.72rem;letter-spacing:2px;background:transparent;color:var(--accent);border:1px solid var(--accent);cursor:pointer;">
+          → PROPSAT DO ZAKÁZKY
+        </button>
+        <button onclick="clearKladyList()"
+          style="padding:9px;font-family:'IBM Plex Mono',monospace;font-size:0.7rem;letter-spacing:2px;background:transparent;color:var(--muted);border:1px solid var(--border);cursor:pointer;">
+          VYMAZAT SEZNAM
+        </button>
+      </div>
+    </div>
+
+    <!-- Prázdný stav -->
+    <div id="kb_empty" style="font-family:'IBM Plex Mono',monospace;font-size:0.78rem;color:var(--muted);text-align:center;padding:30px 0;opacity:0.5;">
+      Zatím žádné klády — zadej rozměry a klikni Přidat
     </div>
 
   </div>
@@ -1652,6 +1669,56 @@
         <button class="btn-calculate" style="flex:1;margin:0;font-size:1rem;padding:14px;" onclick="saveZakazka()">💾 ULOŽIT ZAKÁZKU</button>
         <button class="btn-back" style="flex:0 0 auto;padding:14px 20px;margin:0;" onclick="closeZakazkaModal()">✕ Zrušit</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- PROPSAT DO ZAKÁZKY MODAL -->
+<div id="propsatOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:200;overflow-y:auto;">
+  <div style="max-width:480px;margin:40px auto;background:var(--bg);border:1px solid var(--accent);padding:24px;">
+    <div class="section-label" style="margin-bottom:16px;">// Propsat klády do zakázky</div>
+
+    <!-- Přehled kláд -->
+    <div id="propsatPrehled" style="background:var(--surface2);border:1px solid var(--border);padding:10px 12px;margin-bottom:16px;font-family:'IBM Plex Mono',monospace;font-size:0.72rem;color:var(--muted);line-height:1.8;"></div>
+
+    <!-- Výběr: nová nebo stávající -->
+    <div style="display:flex;gap:6px;margin-bottom:14px;">
+      <button id="propsatBtnNova" onclick="setPropsatMode('nova')"
+        style="flex:1;font-family:'IBM Plex Mono',monospace;font-size:0.7rem;padding:8px;border:1px solid var(--accent);background:var(--accent);color:#1a1a14;cursor:pointer;letter-spacing:1px;">
+        NOVÁ ZAKÁZKA
+      </button>
+      <button id="propsatBtnExist" onclick="setPropsatMode('exist')"
+        style="flex:1;font-family:'IBM Plex Mono',monospace;font-size:0.7rem;padding:8px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;letter-spacing:1px;">
+        STÁVAJÍCÍ ZAKÁZKA
+      </button>
+    </div>
+
+    <!-- Nová zakázka — jen jméno -->
+    <div id="propsatNova">
+      <div class="input-group">
+        <label>Jméno zákazníka</label>
+        <input type="text" id="propsatJmeno" placeholder="Novák Jan" style="width:100%;box-sizing:border-box;">
+      </div>
+    </div>
+
+    <!-- Stávající zakázka — výběr -->
+    <div id="propsatExist" style="display:none;">
+      <div class="section-label" style="margin-bottom:8px;font-size:0.65rem;">// Vybrat zakázku</div>
+      <div id="propsatZakazkyList" style="max-height:220px;overflow-y:auto;"></div>
+      <div id="propsatNoneMsg" style="display:none;font-family:'IBM Plex Mono',monospace;font-size:0.72rem;color:var(--muted);padding:12px 0;">
+        Zatím žádné zakázky — vytvoř novou.
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:16px;">
+      <button onclick="potvrditPropis()"
+        style="flex:1;padding:11px;font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:3px;background:var(--accent);color:#1a1a14;border:none;cursor:pointer;">
+        PROPSAT
+      </button>
+      <button onclick="closePropsatModal()"
+        style="padding:11px 18px;font-family:'IBM Plex Mono',monospace;font-size:0.7rem;letter-spacing:2px;background:transparent;color:var(--muted);border:1px solid var(--border);cursor:pointer;">
+        ZRUŠIT
+      </button>
     </div>
   </div>
 </div>
@@ -2963,88 +3030,216 @@ function switchTab(name) {
 }
 
 // ─── KUBATURA TAB ────────────────────────────────────────────────────────────
-let kbSpecies = 'smrk';
+let kbMode = 'simple';  // 'simple' | 'full'
+let kladyList = [];     // pole kláд v tabulce
+let kladyCounter = 0;
 
 function initKubaturaTab() {
-  const grid = document.getElementById('kb_speciesGrid');
-  if (grid.children.length > 0) return; // already built
-  Object.entries(SPECIES).forEach(([key, sp]) => {
-    const btn = document.createElement('button');
-    btn.textContent = sp.name.split(' ')[0]; // jen první slovo
-    btn.style.cssText = `font-family:'IBM Plex Mono',monospace;font-size:0.7rem;padding:5px 10px;
-      border:1px solid var(--border);background:${key===kbSpecies?'var(--accent)':'transparent'};
-      color:${key===kbSpecies?'#1a1a14':'var(--muted)'};cursor:pointer;letter-spacing:1px;`;
-    btn.onclick = () => {
-      kbSpecies = key;
-      grid.querySelectorAll('button').forEach(b => {
-        b.style.background = 'transparent'; b.style.color = 'var(--muted)';
-      });
-      btn.style.background = 'var(--accent)'; btn.style.color = '#1a1a14';
-      calcKubatura();
-    };
-    grid.appendChild(btn);
-  });
-  // Předvyplň ze hlavního formuláře pokud jsou data
-  const sync = (from, to) => { const v = document.getElementById(from)?.value; if (v) document.getElementById(to).value = v; };
-  sync('dStart','kb_dStart'); sync('dMid','kb_dMid'); sync('dEnd','kb_dEnd'); sync('length','kb_length');
-  calcKubatura();
+  // nic k inicializaci — seznam se udržuje v kladyList
 }
 
-function calcKubatura() {
-  const dStart = parseFloat(document.getElementById('kb_dStart').value) || 0;
-  const dMid   = parseFloat(document.getElementById('kb_dMid').value)   || 0;
-  const dEnd   = parseFloat(document.getElementById('kb_dEnd').value)   || 0;
-  const length = parseFloat(document.getElementById('kb_length').value) || 0;
-  const count  = parseInt(document.getElementById('kb_count').value)    || 1;
+function setKbMode(mode) {
+  kbMode = mode;
+  document.getElementById('kb_inputSimple').style.display = mode === 'simple' ? '' : 'none';
+  document.getElementById('kb_inputFull').style.display   = mode === 'full'   ? '' : 'none';
+  const btnS = document.getElementById('kb_modeSimple');
+  const btnF = document.getElementById('kb_modeFull');
+  btnS.style.background = mode === 'simple' ? 'var(--accent)' : 'transparent';
+  btnS.style.color      = mode === 'simple' ? '#1a1a14' : 'var(--muted)';
+  btnS.style.borderColor= mode === 'simple' ? 'var(--accent)' : 'var(--border)';
+  btnF.style.background = mode === 'full'   ? 'var(--accent)' : 'transparent';
+  btnF.style.color      = mode === 'full'   ? '#1a1a14' : 'var(--muted)';
+  btnF.style.borderColor= mode === 'full'   ? 'var(--accent)' : 'var(--border)';
+}
 
-  if (!dStart || !length) { document.getElementById('kb_results').style.display = 'none'; return; }
+function addKlada() {
+  let dMid, dStart, dEnd, length;
 
-  // Střední průměr pro Hubera — přednost: pole dMid, pak průměr start+end, pak dStart
-  const dMidHub = dMid || (dEnd ? (dStart + dEnd) / 2 : dStart);
-  const dMin    = Math.min(dStart, dMid || dStart, dEnd || dStart);
-  const dMax    = Math.max(dStart, dMid || dStart, dEnd || dStart);
-  const lengthM = length / 100;
-
-  // Huberova metoda: V = (π/4) × d_střed² × L
-  const volHuber = (Math.PI / 4) * Math.pow(dMidHub / 100, 2) * lengthM;
-
-  // Smalianovy metoda (tenčí + silnější konec): V = (π/8) × (dStart² + dEnd²) × L
-  const dS = dStart / 100, dE = (dEnd || dStart) / 100;
-  const volSmalian = (Math.PI / 8) * (dS * dS + dE * dE) * lengthM;
-
-  const sp = SPECIES[kbSpecies] || SPECIES['smrk'];
-  const density = sp.density;
-  const weightKg = volHuber * density;
-
-  // Zobraz výsledky
-  document.getElementById('kb_results').style.display = 'block';
-  document.getElementById('kb_vol').textContent    = volHuber.toFixed(4) + ' m³';
-  document.getElementById('kb_weight').textContent = (weightKg < 100 ? weightKg.toFixed(1) : Math.round(weightKg)) + ' kg';
-
-  const multiRow = document.getElementById('kb_multiRow');
-  if (count > 1) {
-    multiRow.style.display = 'grid';
-    document.getElementById('kb_volTotal').textContent    = (volHuber * count).toFixed(3) + ' m³';
-    document.getElementById('kb_weightTotal').textContent = Math.round(weightKg * count) + ' kg';
+  if (kbMode === 'simple') {
+    dMid   = parseFloat(document.getElementById('kb_dMid').value) || 0;
+    length = parseFloat(document.getElementById('kb_length').value) || 0;
+    if (!dMid || !length) { alert('Zadej průměr středu a délku klády.'); return; }
+    dStart = null; dEnd = null;
   } else {
-    multiRow.style.display = 'none';
+    dStart = parseFloat(document.getElementById('kb_dStart').value) || 0;
+    dMid   = parseFloat(document.getElementById('kb_dMid2').value)  || 0;
+    dEnd   = parseFloat(document.getElementById('kb_dEnd').value)   || 0;
+    length = parseFloat(document.getElementById('kb_length2').value) || 0;
+    if (!dStart || !length) { alert('Zadej alespoň průměr začátku a délku.'); return; }
+    // Střed: buď zadaný, nebo interpolace
+    if (!dMid) dMid = dEnd ? (dStart + dEnd) / 2 : dStart;
   }
 
-  document.getElementById('kb_detail').innerHTML = `
-    <strong style="color:var(--text);">Vstupní data:</strong><br>
-    ⌀ začátek: ${dStart} cm &nbsp;|&nbsp; ⌀ střed: ${dMid||'—'} cm &nbsp;|&nbsp; ⌀ konec: ${dEnd||'—'} cm<br>
-    Délka: ${length} cm &nbsp;|&nbsp; Dřevina: ${sp.name} (${density} kg/m³)<br>
-    <br>
-    <strong style="color:var(--text);">Huberova metoda</strong> — ⌀ střed ${dMidHub} cm:<br>
-    V = π/4 × (${dMidHub}/100)² × ${lengthM.toFixed(2)} = <strong style="color:var(--accent);">${volHuber.toFixed(4)} m³</strong><br>
-    <br>
-    ${dEnd ? `<strong style="color:var(--text);">Smalianova metoda</strong> — průměr obou konců:<br>
-    V = π/8 × (${dStart}² + ${dEnd}²)/10000 × ${lengthM.toFixed(2)} = <strong style="color:var(--muted);">${volSmalian.toFixed(4)} m³</strong><br>
-    Rozdíl oproti Huberovi: ${((volSmalian - volHuber) * 1000).toFixed(1)} dm³<br>` : ''}
-    <br>
-    Sbíhavost: ${dEnd ? ((dMax - dMin) / (length / 100) * 10).toFixed(1) + ' mm/m' : '—'}<br>
-    Hmotnost: ${volHuber.toFixed(4)} m³ × ${density} kg/m³ = <strong style="color:#5a8a4a;">${(weightKg < 100 ? weightKg.toFixed(1) : Math.round(weightKg))} kg</strong>
-  `;
+  // Výpočet — Huberova metoda
+  const sp = SPECIES[selectedSpecies] || SPECIES['smrk'];
+  const lengthM = length / 100;
+  const vol = (Math.PI / 4) * Math.pow(dMid / 100, 2) * lengthM;
+  const kg  = vol * sp.density;
+
+  kladyCounter++;
+  kladyList.push({ id: kladyCounter, dStart, dMid, dEnd, length, vol, kg });
+
+  // Vymaž vstupní pole
+  if (kbMode === 'simple') {
+    document.getElementById('kb_dMid').value = '';
+    document.getElementById('kb_length').value = '';
+  } else {
+    ['kb_dStart','kb_dMid2','kb_dEnd','kb_length2'].forEach(id => document.getElementById(id).value = '');
+  }
+
+  renderKladyList();
+}
+
+function removeKlada(id) {
+  kladyList = kladyList.filter(k => k.id !== id);
+  renderKladyList();
+}
+
+function renderKladyList() {
+  const rows = document.getElementById('kb_rows');
+  const table = document.getElementById('kb_table');
+  const empty = document.getElementById('kb_empty');
+
+  if (kladyList.length === 0) {
+    table.style.display = 'none';
+    empty.style.display = 'block';
+    return;
+  }
+  table.style.display = 'block';
+  empty.style.display = 'none';
+
+  rows.innerHTML = kladyList.map((k, i) => {
+    // Popis průměrů
+    let dDesc;
+    if (k.dStart && k.dEnd) {
+      dDesc = `⌀${k.dStart}/${k.dMid}/${k.dEnd} cm`;
+    } else if (k.dStart) {
+      dDesc = `⌀${k.dStart}/str.${k.dMid} cm`;
+    } else {
+      dDesc = `⌀${k.dMid} cm`;
+    }
+    const lengthDesc = `${k.length} cm`;
+    const dm3 = (k.vol * 1000).toFixed(1);
+
+    return `<div style="display:grid;grid-template-columns:28px 1fr 60px 70px 70px 28px;gap:2px;align-items:center;
+      padding:7px 4px;background:${i%2===0?'var(--surface2)':'transparent'};border-bottom:1px solid var(--border);">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:0.7rem;color:var(--accent);font-weight:bold;">${i+1}</span>
+      <div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.75rem;color:var(--text);">${dDesc}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:var(--muted);">${lengthDesc}</div>
+      </div>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:0.75rem;color:var(--accent);text-align:right;">${k.vol.toFixed(3)}</span>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:0.75rem;color:#5a8a4a;text-align:right;">${Math.round(k.kg)}</span>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:0.7rem;color:var(--muted);text-align:right;">${dm3}</span>
+      <button onclick="removeKlada(${k.id})"
+        style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:0.85rem;padding:0;line-height:1;">✕</button>
+    </div>`;
+  }).join('');
+
+  // Součet
+  const totalVol = kladyList.reduce((s, k) => s + k.vol, 0);
+  const totalKg  = kladyList.reduce((s, k) => s + k.kg, 0);
+  document.getElementById('kb_totalVol').textContent = totalVol.toFixed(3) + ' m³';
+  document.getElementById('kb_totalKg').textContent  = Math.round(totalKg) + ' kg';
+}
+
+function clearKladyList() {
+  if (!confirm('Vymazat celý seznam klád?')) return;
+  kladyList = [];
+  kladyCounter = 0;
+  renderKladyList();
+}
+
+// ─── PROPSAT DO ZAKÁZKY ─────────────────────────────────────────────────────
+let propsatMode = 'nova';
+let propsatSelectedZakazkaId = null;
+
+function propsatDoZakazky() {
+  if (kladyList.length === 0) { alert('Seznam klád je prázdný.'); return; }
+  const totalVol = kladyList.reduce((s,k) => s+k.vol, 0);
+  document.getElementById('propsatPrehled').innerHTML =
+    kladyList.map((k,i) => {
+      const dDesc = k.dStart ? '⌀'+k.dStart+'/'+k.dMid+'/'+(k.dEnd||'?')+' cm' : '⌀'+k.dMid+' cm';
+      return (i+1)+'. '+dDesc+' × '+k.length+' cm — '+k.vol.toFixed(3)+' m³';
+    }).join('<br>') +
+    '<br><strong style="color:var(--accent);">Celkem: '+totalVol.toFixed(3)+' m³ / '+kladyList.length+' ks</strong>';
+  propsatMode = 'nova';
+  propsatSelectedZakazkaId = null;
+  setPropsatMode('nova');
+  document.getElementById('propsatJmeno').value = '';
+  document.getElementById('propsatOverlay').style.display = 'block';
+}
+
+function setPropsatMode(mode) {
+  propsatMode = mode;
+  propsatSelectedZakazkaId = null;
+  const btnN = document.getElementById('propsatBtnNova');
+  const btnE = document.getElementById('propsatBtnExist');
+  btnN.style.background  = mode==='nova' ? 'var(--accent)' : 'transparent';
+  btnN.style.color       = mode==='nova' ? '#1a1a14' : 'var(--muted)';
+  btnN.style.borderColor = mode==='nova' ? 'var(--accent)' : 'var(--border)';
+  btnE.style.background  = mode==='exist' ? 'var(--accent)' : 'transparent';
+  btnE.style.color       = mode==='exist' ? '#1a1a14' : 'var(--muted)';
+  btnE.style.borderColor = mode==='exist' ? 'var(--accent)' : 'var(--border)';
+  document.getElementById('propsatNova').style.display  = mode==='nova'  ? '' : 'none';
+  document.getElementById('propsatExist').style.display = mode==='exist' ? '' : 'none';
+  if (mode === 'exist') renderPropsatZakazkyList();
+}
+
+function renderPropsatZakazkyList() {
+  const zakazky = getZakazky();
+  const list = document.getElementById('propsatZakazkyList');
+  const none = document.getElementById('propsatNoneMsg');
+  if (zakazky.length === 0) { list.innerHTML = ''; none.style.display = 'block'; return; }
+  none.style.display = 'none';
+  list.innerHTML = zakazky.map(z => {
+    const isSel = z.id === propsatSelectedZakazkaId;
+    return `<div onclick="selectPropsatZakazka(${z.id})" style="padding:9px 12px;margin-bottom:4px;cursor:pointer;
+      background:${isSel ? 'var(--accent)' : 'var(--surface2)'};
+      color:${isSel ? '#1a1a14' : 'var(--text)'};
+      border:1px solid ${isSel ? 'var(--accent)' : 'var(--border)'};
+      font-family:'IBM Plex Mono',monospace;font-size:0.72rem;line-height:1.6;">
+      <strong>${z.jmeno}</strong><span style="float:right;opacity:0.7;">${z.datum||''}</span><br>
+      <span style="opacity:0.6;">${z.kulatiny?.length||0} ks klád &nbsp;| ${z.totalM3?.toFixed(3)||'?'} m³ &nbsp;| ${z.stav||''}</span>
+    </div>`;
+  }).join('');
+}
+
+function selectPropsatZakazka(id) {
+  propsatSelectedZakazkaId = id;
+  renderPropsatZakazkyList();
+}
+
+function potvrditPropis() {
+  const novaKulatiny = kladyList.map(k => ({ dm: k.dMid, dl: k.length, m3: k.vol }));
+  if (propsatMode === 'nova') {
+    const jmeno = document.getElementById('propsatJmeno').value.trim();
+    if (!jmeno) { alert('Zadej jméno zákazníka.'); return; }
+    const totalM3 = novaKulatiny.reduce((s,k) => s+k.m3, 0);
+    const zakazky = getZakazky();
+    const today = new Date().toISOString().slice(0,10);
+    zakazky.unshift({ id: Date.now(), jmeno, datum: today, stav: 'nová', sazba: 0, poznamka: '',
+      kulatiny: novaKulatiny, totalM3, totalCena: null, created: Date.now() });
+    saveZakazkyToStorage(zakazky);
+    closePropsatModal();
+    switchTab('zakazky');
+  } else {
+    if (!propsatSelectedZakazkaId) { alert('Vyber zakázku ze seznamu.'); return; }
+    const zakazky = getZakazky();
+    const idx = zakazky.findIndex(z => z.id === propsatSelectedZakazkaId);
+    if (idx < 0) { alert('Zakázka nenalezena.'); return; }
+    const z = zakazky[idx];
+    z.kulatiny = [...(z.kulatiny||[]), ...novaKulatiny];
+    z.totalM3 = z.kulatiny.reduce((s,k) => s+k.m3, 0);
+    if (z.sazba > 0) z.totalCena = Math.round(z.totalM3 * z.sazba);
+    saveZakazkyToStorage(zakazky);
+    closePropsatModal();
+    switchTab('zakazky');
+  }
+}
+
+function closePropsatModal() {
+  document.getElementById('propsatOverlay').style.display = 'none';
 }
 
 function toggleHistory() {
